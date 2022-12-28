@@ -1,10 +1,10 @@
 # DisplayTemps
-##Display neighborhood thermometer readings
+## Display neighborhood thermometer readings
 
 `DT.py` is a program that displays neighborhood-thermometer temperature and humidity readings.  Those readings are obtained by monitoring the Industrial-Scientific-Medical (ISM) band used by remote devices
 to communicate with their owners' displays.  Examples of such devices include the Acurite and LaCrosse indoor/outdoor thermometers, for example.  This program shows the temperature and humidity readings from probes in your neighborhood even if you don't own one of those displays.
 
-##Architecture
+## Architecture
 
 This system uses several components, all of which could be hosted on one computer but 
 can also be distributed over several systems:
@@ -17,13 +17,13 @@ can also be distributed over several systems:
 
 The components are standard components, easily obtained from online sources and well maintained. The only component included here is `DT.py`: sources for the other components are provided by reference.
 
-##Installation
+## Installation
 
 This system was implemented on Raspberry Pi's running Raspbian, but key components will likely run on any Linux distribution.  It should be possible to install the monitoring system on OSX since the software components of the monitoring system are available for Mac (not tried -- use `brew` or `port` for the `mqtt` component).
 
 The first step is to clone this distribution into a working area.  Connect to a download working directory and then `git clone https://github.com/hdtodd/DisplayTemps` to download the display program files and this README.
 
-###The Monitoring Computer
+### The Monitoring Computer
 Perform these steps on the computer you intend to use to monitor the ISM-band radio signals.
 
 1. If you don't already have one, purchase an RTL-SDR receiver.  Use your favorite search engine to search for "rtl sdr receiver".  They cost about $30US.  But be sure to get one with an antenna.  Then you simply plug it in to a USB port on your monitoring computer.
@@ -44,7 +44,7 @@ Perform these steps on the computer you intend to use to monitor the ISM-band ra
 	1. `sudo systemctl enable rtl_433` and `sudo systemctl start rtl_433` to enable and start the service
 	1. Now, whenever the monitoring system is rebooted, it will restart the rtl_433 service and the mqtt service needed to broadcast in JSON format the information received by the RTL\_433 dongle as ISM packets.
 
-###Displaying Temperatures
+### Displaying Temperatures
 The `DT.py` program was designed to run on a Raspberry Pi 7" touchscreen display, but it will function on any XWindows system for which the `tk` library is available.  Perform these steps on the computers you intend to use to display temperatures from neighborhood thermometer remotes.
 
 1. If you haven't already done so, download this package: `git clone https://github.com/hdtodd/DisplayTemps` on a system that will run XWindows and has a keyboard/mouse/display attached.  The remaining work is on that system.
@@ -58,7 +58,7 @@ The `DT.py` program was designed to run on a Raspberry Pi 7" touchscreen display
 
 1. Depending upon your screen size and the number of devices you want to watch, you might want to edit `DT.py` to enlarge the display table and enlarge the table of keyword-label associations.  Or you may want to rearrange the order in that association table so that your nearest thermometers are at the top of the displayed table.
 
-##Operation and Maintenance
+## Operation and Maintenance
 The monitoring system simply broadcasts the JSON `mqtt` packets on your local network, so any number of other computers on your network can display current readings by running `DT.py`.
 
 You may have trouble identifying the location of the various thermometer remotes from which your RTL-SDR receives signals.  But you can likely identify those that are closest to you by observing the average signal-to-noise ratio over time and selecting those with the highest SNR for display in your table.  See the section below on how to do that.
@@ -67,7 +67,7 @@ You may have trouble identifying the location of the various thermometer remotes
 
 You will, over time, need to remove the JSON log file on the monitoring computer (`/var/log/rtl_433/rtl_433.json`).  
 
-##Cataloging Nearby Devices with `snr`
+## Cataloging Nearby Devices with `snr`
 
 The `rtl_433.conf` configuration file entry `output json:/var/log/rtl_433/rtl_433.json` in the setup of the monitoring system above creates a log file on that monitoring system of all JSON packets published via `mqtt`.  It can be analyzed to catalog the devices from which the monitoring RTL_SDR dongle has received ISM packets.
 
@@ -81,7 +81,7 @@ Install and invoke the `snr` program:
 1. `cat rtl.txt` or `less rtl.txt` to browse the report.  Look, in particular, for thermometer devices with a relatively large number of recorded entries and large SNR values: those are likely devices that are static and near to your location.  [You'll also see tire-pressure gauges, fuel-oil readings, security systems, etc.]
 1. Use the information from the `snr` catalog to update the "model+id"-label association table at the beginning of the `DT.py` code.
 
-##Author
+## Author
 Written by David Todd, hdtodd@gmail.com, 2022.06.
 
 
