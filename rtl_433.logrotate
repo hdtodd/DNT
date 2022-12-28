@@ -1,0 +1,15 @@
+/var/log/rtl_433/*.json {
+daily
+missingok
+rotate 30
+create
+compress
+dateext
+notifempty
+prerotate
+	/usr/bin/systemctl stop rtl_433
+endscript
+
+postrotate
+	/usr/bin/systemctl start rtl_433
+endscript
