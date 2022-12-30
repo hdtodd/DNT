@@ -11,9 +11,9 @@ import time
 from paho.mqtt import client as mqtt_client
 
 ## *** BEGIN MODIFY LOCAL PARAMETERS ***
-broker = '<monitorhost>'
+broker = '<mymonitor>'
 port = 1883
-topic = "rtl_433/<monitorhost>/events"
+topic = "rtl_433/<mymonitor>/events"
 # generate client ID with pub prefix randomly
 client_id = f'python-mqtt-{random.randint(0, 100)}'
 # if monitoring system mqtt broker is secured, fill these in
