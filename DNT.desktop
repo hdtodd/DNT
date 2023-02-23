@@ -3,7 +3,7 @@ Comment=Neighborhood Temperatures display launcher
 Terminal=false
 Name=NT
 Type=Application
-Exec=/usr/bin/python3 /usr/local/bin/NT.py
+Exec=/usr/bin/python3 /usr/local/bin/DNT.py
 Icon=/usr/local/share/pixmaps/NT.png
 
 
