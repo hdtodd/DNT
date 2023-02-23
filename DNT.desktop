@@ -1,0 +1,10 @@
+[Desktop Entry]
+Comment=Neighborhood Temperatures display launcher
+Terminal=false
+Name=NT
+Type=Application
+Exec=/usr/bin/python3 /usr/local/bin/NT.py
+Icon=/usr/local/share/pixmaps/NT.png
+
+
+
