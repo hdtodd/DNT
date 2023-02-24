@@ -1,4 +1,4 @@
-/var/log/rtl_433/*.json {
+/var/log/rtl_433/rtl_433.json {
 daily
 missingok
 rotate 30
