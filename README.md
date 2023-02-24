@@ -61,8 +61,8 @@ Perform these steps on the computers you intend to use to display temperatures f
 	* `sudo mkdir -p /usr/local/share/pixmaps`
 	* `mkdir ~/Desktop`
 	* `sudo cp DNT.py /usr/local/bin/`
-	* `sudo cp NT.png /usr/local/share/pixmaps/`
-	* `cp NT.desktop ~/Desktop/`
+	* `sudo cp DNT.png /usr/local/share/pixmaps/`
+	* `cp DNT.desktop ~/Desktop/`
 
 ## Operation and Maintenance
 The monitoring system simply broadcasts the JSON `mqtt` packets on your local network, so any number of other computers on your network can display current readings by running `DNT.py`.
