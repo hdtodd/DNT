@@ -1,10 +1,10 @@
 [Desktop Entry]
-Comment=Neighborhood Temperatures display launcher
+Comment=Display Neighborhood Temperatures launcher
 Terminal=false
-Name=NT
+Name=DNT
 Type=Application
 Exec=/usr/bin/python3 /usr/local/bin/DNT.py
-Icon=/usr/local/share/pixmaps/NT.png
+Icon=/usr/local/share/pixmaps/DNT.png
 
 
 
