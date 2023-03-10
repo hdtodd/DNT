@@ -1,7 +1,7 @@
 /var/log/rtl_433/rtl_433.json {
-daily
+weekly
 missingok
-rotate 30
+rotate 12
 create
 compress
 dateext

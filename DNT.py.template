@@ -13,6 +13,7 @@ import tkinter.font as tkFont
 import random
 import json
 import time
+import datetime
 import getopt, sys
 from paho.mqtt import client as mqtt_client
 
@@ -105,6 +106,28 @@ def getarg():
         quit()
 
 ###############################################################################
+# Convert time from various formats to epoch time
+def CnvTime(ts):
+    if ts.find("-") > 0:
+        try:
+            eTime = datetime.datetime.fromisoformat(ts).timestamp()
+        except ValueError as e:
+            err={}
+            print("datetime error in input line", lc, "converting time string: ", ts)
+            print("datetime  msg:", err.get("error", str(e)))
+            quit()
+    else:
+        try:
+            eTime = float(ts)
+        except ValueError as e:
+            err = {}
+            print("Datetime conversion failed on line", lc, "with datetime string", ts)
+            print("float() error msg:", err.get("error", str(e)))
+            quit()
+    return(eTime)
+
+
+###############################################################################
 # Functions for displaying
 
 # Toggle fullscreen
@@ -179,7 +202,7 @@ def subscribe(mqtt: mqtt_client):
             hum = 0 if not ("humidity" in y.keys()) else int(y["humidity"])
             # Is this a duplicate record?  Use time+model+id as a fingerprint to tell.
             # Get time in seconds since Epoch for comparison purposes, with 2 sec threshhold
-            eTime = time.mktime(time.strptime(y["time"], "%Y-%m-%d %H:%M:%S"))
+            eTime = CnvTime(y["time"])
 
             # If not a duplicate entry, then process & record; else skip
             if eTime>lastEntry["time"]+thresh or y["model"]!=lastEntry["model"] or y["id"]!=lastEntry["id"]:
