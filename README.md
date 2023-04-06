@@ -1,25 +1,30 @@
 # DNT: Display Neighborhood Temperatures
 ### Display thermometer readings from around your neighborbood
 
-`DNT.py` is a program that uses the output from `rtl_433` to display temperature and humidity readings from remote thermometers around your neighborhood.  Those readings are obtained by using `rtl_433` to monitor the Industrial-Scientific-Medical (ISM) radio-frequency band used by remote devices to communicate with their owners' displays.  Such devices include the Acurite and LaCrosse indoor/outdoor thermometers, for example.  `rtl_433` receives and analyzes those broadcast packets.  This program uses the output of `rtl_433` to display the temperature (in Fahrenheit or Celsius) and relative-humidity readings from probes in your neighborhood, across a variety of manufacturers' devices, even if you don't own one of those displays.
+`DNT.py` is a program that uses the output from `rtl_433` to display temperature and humidity readings from remote thermometers around your neighborhood.  Those readings are obtained by using `rtl_433` to monitor the Industrial-Scientific-Medical (ISM) radio-frequency band used by remote devices to communicate with their owners' base stations.  Acurite and LaCrosse indoor/outdoor thermometers are examples of such devices.  `rtl_433` receives and analyzes those broadcast packets.  This program uses the output of `rtl_433` to display the temperature (in Fahrenheit or Celsius) and relative-humidity readings from probes in your neighborhood, across a variety of manufacturers' devices, even if you don't own one of those displays.
+
+
 
 ## Architecture
 
 This system uses several components, all of which could be hosted on one computer but can also be distributed over several systems:
 
-* The `DNT.py` program itself, which displays the current readings from a set of neighboring remote probes.  `DNT.py` receives the readings over your local-area network via `mqtt` from a monitoring system.  `DNT.py` can actually run on the monitoring computer itself or on any number of other computers connected to the same local-area network as the monitoring computer.
+* The `DNT` Python program itself, which displays the current readings from a set of neighboring remote probes.  `DNT` receives the readings over your local-area network via MQTT from an `rtl_433` monitoring system.  `DNT` can actually run on the monitoring computer itself or on any number of other computers connected to the same local-area network as the monitoring computer.
 * A monitoring system that:
-	* Has an RTL_SDR dongle attached that receives ISM broadcasts.  In the US, that band is at 433.92MHz, but the devices and software components function across the range of ISM bands used around the world. 
-	* Runs the `rtl_433` program to collect and analyze the ISM packets and broadcast the analyzed packets as JSON messages via `mqtt` over your local network.
-	* Runs an `mqtt` broker to publish the ISM events seen by `rtl_433`.
+	* Has an RTL_SDR dongle attached, to receive ISM broadcasts.  In the US, that band is at 433.92MHz, but the devices and software components function across the range of ISM bands used around the world. 
+	* Runs the `rtl_433` program to collect and analyze the ISM packets and publish the analyzed packets as JSON messages via MQTT over your local network.
+	* Runs an MQTT broker to publish the ISM events seen by `rtl_433`.
 
-The components are standard hardware and software components, easily obtained from online sources and well maintained. The only component included here is `DNT.py`: sources for the other components are provided by reference.
+The components are standard hardware and software components, easily obtained from online sources and well maintained. The only component included here is `DNT`: sources for the other components are provided by reference.
 
 ## Installation
 
-This system was implemented on Raspberry Pi's running Raspbian, but key components will likely run on any Linux distribution. The `DNT.py` program also runs on Apple's Mac OSX system with Python3 installed.  It should be possible to install the monitoring system on OSX as well since the software components of the monitoring system are available for Mac (not tried -- use `brew` or `port` to install the `mqtt` component).
+This system was implemented on Raspberry Pi's running Raspbian, but key components will likely run on any Linux distribution. The `DNT` program also runs on Apple's Mac OSX system with Python3 installed.  It should be possible to install the monitoring system on OSX as well since the software components of the monitoring system are available for Mac (not tried -- use `brew` or `port` to install the MQTT component).
 
 The first step is to clone this distribution into a working area.  Connect to a download working directory and then `git clone https://github.com/hdtodd/DNT` to download the display-program file and this README.
+
+
+
 
 ### The Monitoring Computer
 Perform these steps on the computer you intend to use to monitor the ISM-band radio signals.
@@ -35,7 +40,7 @@ Perform these steps on the computer you intend to use to monitor the ISM-band ra
    * Edit `/usr/local/etc/rtl_433/rtl_433.conf`:
      * If your regional ISM band is not 433.92MHz, set the correct frequency in the "frequency" entry.
      * Under `## Analyze/Debug options`, comment out stats reporting: `#report_meta stats`
-     * Under `## Data output options`/`# as command line option:` add `output mqtt` and `output json:/var/log/rtl_433/rtl_433.json`.  The former has the program publish received packets via `mqtt` and the latter logs received packets to a log file in case you want to do subsequent analysis of devices in your neighborhood.  More options for `mqtt` publishing service are available, but this will get you started.
+     * Under `## Data output options`/`# as command line option:` add `output mqtt` and `output json:/var/log/rtl_433/rtl_433.json`.  The former has the program publish received packets via MQTT and the latter logs received packets to a log file in case you want to do subsequent analysis of devices in your neighborhood.  More options for MQTT publishing service are available, but this will get you started.
      *Create the directory for that log file: `sudo mkdir /var/log/rtl_433`
 1. **PRODUCTION TEST** Now `sudo /usr/local/bin/rtl_433` from the command line of one terminal screen on the monitoring computer.  From the command line of another terminal screen on that computer, or from another computer with mosquitto client installed, type `mosquitto_sub -h <monitorhost> -t "rtl_433/<monitorhost>/events"`, where you substitute your monitoring computer's hostname for "\<monitorhost>".  If you have ISM-band traffic in your neighborhood, and if you've tuned `rtl_433` to the correct frequency, you should be seeing the JSON-format records of packets received by the RTL\_SDR dongle.  If you don't, first verify that you can publish to `mosquitto` on that monitoring computer and receive via a client (use the native `mosquitto_pub` and `mosquitto_sub` commands).  If `mosquitto` is functioning correctly, check that the rtl\_433 configuration file specifies mqtt output correctly.
 1. Finally, install the rtl_433 monitor as a service:
