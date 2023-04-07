@@ -97,12 +97,6 @@ class Data:
         self.status    = status
         return (dup, batt_change, stat_change)
 
-#########################################################################################
-# CNTL-C handler
-def handler(signum, frame):
-    print()
-    sys.exit(0)
- 
 ###############################################################################
 #  Create the command parser, parse cmd line,  and set defaults
 def make_parser():
@@ -267,9 +261,11 @@ def add_row(devnum, loc, temp, hum):
 # MQTT functions and display updating
 # Connect to  MQTT broker 
 def connect_mqtt() -> mqtt_client:
+    global debug
     def on_connect(mqtt, userdata, flags, rc):
         if rc == 0:
-            print("Connected to MQTT Broker!")
+            if debug:
+                print("Connected to MQTT Broker!")
         else:
             print("Failed attempt to connect to ", mqtt)
             print("  with userdata ", userdata)
@@ -378,21 +374,25 @@ def subscribe(mqtt: mqtt_client):
         
     mqtt.subscribe(topic)
     mqtt.on_message = on_message
-    print("subscribed to mqtt feed")
+    if debug:
+        print("subscribed to mqtt feed")
     return #From subscribe()
 
+# CNTL-C and QUIT button handler
 def quit_prog(event=None):
+    print()
     mqtt.loop_stop()
     mqtt.disconnect()
     win.quit()
-        
+    sys.exit(0)
+    
 ###############################################################################
 # Main script
 
 if __name__ == "__main__":
     
     t = datetime.datetime.now()
-    signal.signal(signal.SIGINT, handler)
+    signal.signal(signal.SIGINT, quit_prog)
 
     set_params()
 
@@ -457,7 +457,7 @@ if __name__ == "__main__":
     devnum  = 0
     tbl.append( (tk.StringVar(), tk.StringVar(), tk.StringVar() ) )
     (devnum, row)  = add_row(devnum, tbl[devnum][0], tbl[devnum][1], tbl[devnum][2])
-    tbl[0][0].set("Thermometer/Location")
+    tbl[0][0].set("Location or Thermometer")
     tbl[0][1].set("Temp "+tScale)
     tbl[0][2].set("%RH")
     tblrow.append(row)
@@ -472,5 +472,6 @@ if __name__ == "__main__":
     mqtt = connect_mqtt()
     mqtt.loop_start()
 
-    print("entering run loop")
+    if debug:
+        print("entering run loop")
     win.mainloop()
