@@ -36,7 +36,7 @@ location = {
     "Acurite-609TXC//51"       : "Outside",
     "Acurite-606TX//161"       : "Porch",
     }
-# Display known remote sensors; size to allow for header row 
+# Display known remote sensors; size to allow for header row
 
 ##  *** END LOCAL MODIFICATIONS ***
 
@@ -57,14 +57,16 @@ useF=True
 tScale = "°F"
 
 # Remember if we are fullscreen or windowed; toggle starts fullscreen
+win = None
+frm_table = None
 fullscreen = False
-
+dfont = None
+hfont = None
+lfont = None
 first_rec = True
 debug     = False
+devnum = None
 
-# Set blank "lastEntry" key record fields for rejecting duplicate records
-#   time+/-2sec with model & id the same count as a duplicate record
-lastEntry = { "time":0.0, "model":"", "id":0 }
 # Set 2-sec threshhold for rejecting duplicate records
 dup_thresh = 2.0
 
@@ -79,9 +81,6 @@ class Data:
         self.battery   = battery
         self.status    = status
         self.dRow      = dRow
-        self.dloc      = tk.StringVar()
-        self.dtemp     = tk.StringVar()
-        self.dhum      = tk.StringVar()
         return
 
     # Update information about this device and return a
@@ -100,7 +99,7 @@ class Data:
 ###############################################################################
 #  Create the command parser, parse cmd line,  and set defaults
 def make_parser():
-    
+
     parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter,
                                      description=AP_DESCRIPTION,
                                      epilog=AP_EPILOG)
@@ -130,7 +129,7 @@ def make_parser():
 # Set execution parameters from cmdline
 def set_params():
     global broker, topic, username, password, port, useF, tScale, debug
-    
+
     args = make_parser()
 
     #  We need host and topic, so if not already provided by
@@ -216,7 +215,7 @@ def toggle_fullscreen(event=None):
 
     fullscreen = not fullscreen
     win.attributes('-fullscreen', fullscreen)
-#    resize()
+    resize()
     return
 
 # Automatically resize font size based on window size
@@ -227,22 +226,24 @@ def resize(event=None):
 
     # Resize font based on frame height (minimum size of 12)
     # Use negative number for "pixels" instead of "points"
-    dfont.configure(size=-max(12, int((win.winfo_height() / 12))))
-    lfont.configure(size=-max(18, int((win.winfo_height() / 9))))
+    hfont.configure(size=-max(36, int((win.winfo_height() / 18))))
+    dfont.configure(size=-max(24, int((win.winfo_height() / 24))))
+    lfont.configure(size=-max(30, int((win.winfo_height() / 24))))
 
-    for j in range(3):
-        tbl[0][j].configure(font=lfont)
-        for i in range(1,displaySize-1):
-            tbl[i][j].configure(font=dfont)
+#    for j in range(3):
+#        tbl[0][j].configure(font=lfont)
+#        for i in range(1,displaySize-1):
+#            tbl[i][j].configure(font=dfont)
 
-    btn_quit.config(font=dfont)
-    btn_toggle.config(font=dfont)
+#    btn_quit.config(font=dfont)
+#    btn_toggle.config(font=dfont)
     return
 
 #######################################################################################
 # Table management and display
 
 def add_row(devnum, loc, temp, hum):
+    global frm_table
     row = tk.Frame(frm_table)
     tblrow.append(row)
     # Color the header row differently
@@ -259,7 +260,7 @@ def add_row(devnum, loc, temp, hum):
 
 ###############################################################################
 # MQTT functions and display updating
-# Connect to  MQTT broker 
+# Connect to  MQTT broker
 def connect_mqtt() -> mqtt_client:
     global debug
     def on_connect(mqtt, userdata, flags, rc):
@@ -287,7 +288,7 @@ def subscribe(mqtt: mqtt_client):
     def on_message(mqtt, userdata, msg):
         global first_rec, last_rec
         global devices, devnum, tbl
-        
+
         # parse the json payload
         y = json.loads(msg.payload.decode())
 
@@ -315,7 +316,7 @@ def subscribe(mqtt: mqtt_client):
                     ltemp = (ltemp-32.0)*5.0/9.0
             else:
                 return   # if no temp reading in record, ignore it
-            
+
         # OK, we have a temp reading. Get the variables we need
         eTime   = CnvTime(y["time"])
         loc     = dev if dev not in location else location[dev]
@@ -344,11 +345,6 @@ def subscribe(mqtt: mqtt_client):
             (devnum, row) = add_row(devnum, tbl[devnum][0], tbl[devnum][1], tbl[devnum][2])
             row.pack(side="top")
 
-        if first_rec:
-            earliest_time.set(y["time"])
-            first_rec = False
-        last_time.set(y["time"])
-
         if not dup:
             if debug:
                  print("Updating display table row ", dRow, "for", loc)
@@ -371,7 +367,7 @@ def subscribe(mqtt: mqtt_client):
                 pass
 #            resize()
             return  #From on_message()
-        
+
     mqtt.subscribe(topic)
     mqtt.on_message = on_message
     if debug:
@@ -380,76 +376,56 @@ def subscribe(mqtt: mqtt_client):
 
 # CNTL-C and QUIT button handler
 def quit_prog(event=None):
-    print()
     mqtt.loop_stop()
+    print()
+    time.sleep(1)      # let events clear (we hope)
     mqtt.disconnect()
     win.quit()
     sys.exit(0)
-    
-###############################################################################
-# Main script
 
-if __name__ == "__main__":
-    
-    t = datetime.datetime.now()
-    signal.signal(signal.SIGINT, quit_prog)
 
-    set_params()
-
-    # Device:Data dictionary
-    devices = {}
-
-    # List of widgets to display
-    tbl = []
-    tblrow = []
-    
+def create_display():    
+    global win, frm_table, dfont, hfont, lfont, devnum
     # Create the main window
     win = tk.Tk()
     win.title("Neighborhood Temperatures")
 
     # Create dynamic font for text
-    hfont = tkFont.Font(size=-40)
-    dfont = tkFont.Font(size=-18)
-    lfont = tkFont.Font(size=-36, weight="bold")
+    hfont = tkFont.Font(size=-36)
+    dfont = tkFont.Font(size=-24)
+    lfont = tkFont.Font(size=-30, weight="bold")
 
     # Build the title section of the display
     frm_title = tk.Frame(win, borderwidth=10, relief="groove")
     frm_title.pack(side="top", fill="x", expand=True)
     lbl_title = tk.Label(frm_title, text="Display Neighborhood Temperatures",
                          font=hfont, bg="cornflower blue", fg="white")
-    lbl_title.pack(anchor="center", fill="x", padx=10, pady=10)
+    lbl_title.pack(anchor="center", fill="x")
 
     # Build the menu button
-    frm_toolbar = tk.Frame(win)
-    frm_toolbar.pack(side="top", fill="x", expand=True)
-    btn_quit   = tk.Button(frm_toolbar, text="Quit",           width=6,  height=2,
-                           font=dfont, fg='red', command=quit_prog)
-    btn_toggle = tk.Button(frm_toolbar, text="Toggle\nScreen", width=10, height=2,
-                           font=dfont, fg='blue', command=toggle_fullscreen)
-    btn_quit.pack(side="left")
-    btn_toggle.pack(side="right")
+#    frm_toolbar = tk.Frame(win)
+#    frm_toolbar.pack(side="top", fill="x", expand=True)
+#    btn_quit   = tk.Button(frm_toolbar, text="Quit",           width=6,  height=2,
+#                           font=dfont, fg='red', command=quit_prog)
+#    btn_toggle = tk.Button(frm_toolbar, text="Toggle\nScreen", width=10, height=2,
+#                           font=dfont, fg='blue', command=toggle_fullscreen)
+#    btn_quit.pack(side="right")
+#    btn_toggle.pack(side="left")
 
     # Build the information section
     frm_info = tk.Frame(win, borderwidth=5, relief="raised")
     frm_info.pack(side="top", fill="x", expand=True)
-    earliest_time = tk.StringVar()
-    earliest_time.set(t.strftime('%Y-%m-%d %H:%M:%S'))
-    last_time = tk.StringVar()
-    last_time.set(t.strftime('%Y-%m-%d %H:%M:%S'))
-    lbl_monitor = tk.Label(frm_info, text="Monitoring host: %s and topic: %s" % (broker, topic), font=dfont)
-    lbl_monitor.pack(side="top", padx=5, pady=5)
-    #lbl_first = tk.Label(frm_info, text="Earliest record:\n%s" % earliest_time, font=dfont)
-    lbl_first = tk.Label(frm_info, text="Earliest record:", font=dfont)
-    lbl_first.pack(side="left", padx=5, pady=5)
-    #lbl_last = tk.Label(frm_info, text="Latest record:\n%s" % last_time, font=dfont)
-    lbl_ltime = tk.Label(frm_info, textvariable=last_time,     font=dfont)
-    lbl_ltime.pack(side="right", padx=5, pady=5)
-    lbl_last = tk.Label(frm_info, text="Latest record:",    font=dfont)
-    lbl_last.pack(side="right", padx=5, pady=5)
-    lbl_ftime = tk.Label(frm_info, textvariable=earliest_time, font=dfont)
-    lbl_ftime.pack(side="left", padx=5, pady=5)
+    lbl_monitor = tk.Label(frm_info, text="Monitoring host: %s" % (broker), font=dfont)
+    btn_toggle = tk.Button(frm_info, text="Togl",           width=4, height=1,
+                           font=dfont, fg='blue', command=toggle_fullscreen)
+    btn_quit   = tk.Button(frm_info, text="Quit",           width=4,  height=1,
+                           font=dfont, fg='red',  command=quit_prog)                           
+    lbl_monitor.pack(side="left", padx=2, pady=2)
+    btn_quit.pack(side="right")
+    btn_toggle.pack(side="right")
 
-    # And create the table for data display    
+
+    # And create the table for data display
     frm_table = tk.Frame(win, borderwidth=5, relief="groove")
     frm_table.pack(side="top", fill="both", expand=True, padx=5, pady=5)
 
@@ -466,7 +442,28 @@ if __name__ == "__main__":
     # Have <ESC> toggle window, and call resize() every time the window is resized
     win.bind('<Escape>', toggle_fullscreen)
 #    win.bind("<ButtonRelease-1>", resize)
+    return
 
+###############################################################################
+# Main script
+
+if __name__ == "__main__":
+
+    t = datetime.datetime.now()
+    signal.signal(signal.SIGINT, quit_prog)
+
+    set_params()
+
+    # Device:Data dictionary
+    devices = {}
+
+    # List of widgets to display
+    tbl = []
+    tblrow = []
+
+    # Create the display
+    create_display()
+    
     # connect to the mqtt broker and subscribe to the feed.
     #   MQTT events cause the displayed values to be updated
     mqtt = connect_mqtt()
@@ -474,4 +471,6 @@ if __name__ == "__main__":
 
     if debug:
         print("entering run loop")
+
+    # Start the main loop and let MQTT events populate the display table
     win.mainloop()
