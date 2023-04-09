@@ -292,6 +292,10 @@ def subscribe(mqtt: mqtt_client):
         # parse the json payload
         y = json.loads(msg.payload.decode())
 
+        # Ignore tire pressure monitoring system temp reports
+        if "type" in y and y["type"]=="TPMS":
+            return
+        
         # If not a device record, just return
         if not "model" in y:
             return
