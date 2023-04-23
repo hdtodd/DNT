@@ -1,0 +1,626 @@
+#!/usr/bin/env python3
+# DNT -- Display Temperatures from neighborhood remote thermometers
+# Modeled after
+#   https://learn.sparkfun.com/tutorials/python-gui-guide-introduction-to-tkinter/experiment-3-sensor-dashboard
+#
+# HDTodd, Williston, VT, February, 2023; v2 April, 2023
+
+import argparse
+import sys
+import os
+import signal
+from paho.mqtt import client as mqtt_client
+import random
+import json
+import time
+import datetime
+from enum import IntEnum
+try:
+    import tkinter as tk
+    from tkinter import ttk
+    import tkinter.font as tkFont
+except ImportError:
+    import Tkinter as tk
+    import ttk
+    import Tkinter.font as tkFont
+
+AP_DESCRIPTION="""
+DNT:  Display the temperatures of neighborhood remote thermometer sensors
+      as observed and published as MQTT by rtl_433.
+"""
+
+AP_EPILOG="""
+
+"""
+
+###############################################################################
+##  *** BEGIN LOCAL MODIFICATIONS ***
+
+# Locations of known local sensors to be monitored
+# Dictionary entries are "model/channel/id":"Familiar Name".
+# Run this program from a terminal session to see a list of "model/channel/id"
+#   dictionary keywords for devices in your neighborhood, then add entries with
+#   those keywords and associated locations into the 'location' dictionary here
+
+location = {
+    "Acurite-609TXC//51"        : "Outside",
+    "Acurite-606TX//161"        : "Porch",
+    "LaCrosse-TX141THBv2/0/168" : "Frank 168",
+    }
+# Display known remote sensors; size to allow for header row
+
+##  *** END LOCAL MODIFICATIONS ***
+
+###############################################################################
+# Global variable initialization
+
+# MQTT connection management
+# Parameters used to establish the mqtt connection to the rtl_433
+#   receiver mqtt publisher
+broker = None
+topic = "rtl_433/+/events"
+port = 1883
+username = ""
+password = ""
+client_id = f'python-mqtt-{random.randint(0, 100)}'
+
+# By default, use Fahrenheit scale for display
+useF=True
+tScale = "°F"
+
+# Remember if we are fullscreen or windowed; toggle starts fullscreen
+win = None
+frm_table = None
+fullscreen = False
+dfont = None
+hfont = None
+lfont = None
+pktcnt = 0
+debug     = False
+devnum = None
+bl_flag = "\U0000203C"  # '!!': want to use "\U0001FAAB" {low battery} but not available
+st_flag = "\U00002049"  # '?!'
+Warnings = [" ", st_flag, bl_flag]
+Warn = IntEnum('Warn', [ ('OK', 0), ('ALERT', 1), ('ALARM', 2)])
+
+# Set 2-sec threshhold for rejecting duplicate records
+dup_thresh = 2.0
+
+##########################################################################################
+# DoubleScrolledFrame class adapted from
+#   https://gist.github.com/novel-yet-trivial/2841b7b640bba48928200ff979204115
+class DoubleScrolledFrame:
+    """
+    A vertically scrolled Frame that can be treated like any other Frame
+    ie it needs a master and layout and it can be a master.
+    keyword arguments are passed to the underlying Frame
+    except the keyword arguments 'width' and 'height', which
+    are passed to the underlying Canvas
+    note that a widget layed out in this frame will have Canvas as self.master,
+    if you subclass this there is no built in way for the children to access it.
+    You need to provide the controller separately.
+    """
+    def __init__(self, master, **kwargs):
+        width = kwargs.pop('width', None)
+        height = kwargs.pop('height', None)
+        self.outer = tk.Frame(master, **kwargs)
+
+        self.vsb = ttk.Scrollbar(self.outer, orient=tk.VERTICAL)
+        self.vsb.grid(row=0, column=1, sticky='ns')
+        self.hsb = ttk.Scrollbar(self.outer, orient=tk.HORIZONTAL)
+        self.hsb.grid(row=1, column=0, sticky='ew')
+        self.canvas = tk.Canvas(self.outer, highlightthickness=0, width=width, height=height)
+        self.canvas.grid(row=0, column=0, sticky='nsew')
+        self.outer.rowconfigure(0, weight=1)
+        self.outer.columnconfigure(0, weight=1)
+        self.canvas['yscrollcommand'] = self.vsb.set
+        self.canvas['xscrollcommand'] = self.hsb.set
+        # mouse scroll does not seem to work with just "bind"; You have
+        # to use "bind_all". Therefore to use multiple windows you have
+        # to bind_all in the current widget
+        self.canvas.bind("<Enter>", self._bind_mouse)
+        self.canvas.bind("<Leave>", self._unbind_mouse)
+        self.vsb['command'] = self.canvas.yview
+        self.hsb['command'] = self.canvas.xview
+
+        self.inner = tk.Frame(self.canvas)
+        # pack the inner Frame into the Canvas with the topleft corner 4 pixels offset
+        self.canvas.create_window(4, 4, window=self.inner, anchor='nw')
+        self.inner.bind("<Configure>", self._on_frame_configure)
+
+        self.outer_attr = set(dir(tk.Widget))
+
+    def __getattr__(self, item):
+        if item in self.outer_attr:
+            # geometry attributes etc (eg pack, destroy, tkraise) are passed on to self.outer
+            return getattr(self.outer, item)
+        else:
+            # all other attributes (_w, children, etc) are passed to self.inner
+            return getattr(self.inner, item)
+
+    def _on_frame_configure(self, event=None):
+        x1, y1, x2, y2 = self.canvas.bbox("all")
+        height = self.canvas.winfo_height()
+        width = self.canvas.winfo_width()
+        self.canvas.config(scrollregion = (0,0, max(x2, width), max(y2, height)))
+
+    def _bind_mouse(self, event=None):
+        self.canvas.bind_all("<4>", self._on_mousewheel)
+        self.canvas.bind_all("<5>", self._on_mousewheel)
+        self.canvas.bind_all("<MouseWheel>", self._on_mousewheel)
+
+    def _unbind_mouse(self, event=None):
+        self.canvas.unbind_all("<4>")
+        self.canvas.unbind_all("<5>")
+        self.canvas.unbind_all("<MouseWheel>")
+        
+    def _on_mousewheel(self, event):
+        """Linux uses event.num; Windows / Mac uses event.delta"""
+        func = self.canvas.xview_scroll if event.state & 1 else self.canvas.yview_scroll 
+        if event.num == 4 or event.delta > 0:
+            func(-1, "units" )
+        elif event.num == 5 or event.delta < 0:
+            func(1, "units" )
+    
+    def __str__(self):
+        return str(self.outer)
+
+
+##########################################################################################
+# Define a class to hold the data for a device and procedures to create, update, access
+class Data:
+    def __init__(self, dRow, eTime, loc, temp, hum, battery, status):
+        self.last_time = eTime
+        self.loc       = loc
+        self.temp      = temp
+        self.hum       = hum
+        self.battery   = battery
+        self.status    = status
+        self.wlevel    = Warn.ALARM if battery==0 else Warn.OK
+        self.warn      = Warnings[self.wlevel]
+        self.dRow      = dRow
+        return
+
+    # Update information about this device
+    # Return a flag to indicate if it was a duplicate record for this xmit
+    # and warning flag if battery has EVER been low or status has EVER changed
+    # That is, the warning is sticky: once set, must be manually reset
+    def update(self, eTime, temp, hum, battery, status):
+        dup = eTime < self.last_time + dup_thresh
+        self.last_time = eTime
+        self.temp      = temp
+        self.hum       = hum
+        self.wlevel    = max(self.wlevel, Warn.ALARM if battery==0 else Warn.OK,
+                             Warn.ALERT if status != self.status else Warn.OK)
+        self.warn      = Warnings[self.wlevel]
+        self.battery   = battery
+        self.status    = status
+        return dup
+
+###############################################################################
+#  Create the command parser, parse cmd line,  and set defaults
+def make_parser():
+
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description=AP_DESCRIPTION, epilog=AP_EPILOG)
+
+    parser.add_argument("-H", "--host", dest="host", type=str,
+                        default=broker,
+                        help="MQTT broker hostname to connect to (default: %(default)s)")
+    parser.add_argument("-T", "--topic", dest="topic", type=str,
+                        default=topic,
+                        help="rtl_433 MQTT event topic to subscribe to (default: %(default)s)")
+    parser.add_argument("-U", "--username", type=str, default=username,
+                        help="MQTT username, if needed; defaults to blank")
+    parser.add_argument("-P", "--password", type=str, default=password,
+                        help="MQTT password, if needed; defaults to blank")
+    parser.add_argument("-p", "--port", type=int, default=port,
+                        help="MQTT port (default: %(default)s)")
+    parser.add_argument("-d", "--debug", dest="debug", action="store_true")
+    parser.add_argument("-W", "--warn", dest="warn", action="store_true",
+                        help="Insert warnings at pkts 20 & 40 to debug; requires -d")
+    specifyTemp = parser.add_mutually_exclusive_group()
+    specifyTemp.add_argument("-C", "--Celsius", dest="degC",
+                             action="store_true", default=False,
+                             help="Display temperatures in Celsius (default is Fahrenheit)")
+    specifyTemp.add_argument("-F", "--Fahrenheit", dest="degC", action="store_false",
+                             default=True,
+                             help="Display temperatures in Fahrenheit (default)")
+    args = parser.parse_args()
+    return args
+
+###############################################################################
+# Set execution parameters from cmdline
+def set_params():
+    global broker, topic, username, password, port, useF, tScale, debug, debugW
+
+    args = make_parser()
+
+    #  We need host and topic, so if not already provided by
+    #    cmdline, env, or embedded source code, then ask for them
+    if not args.host:
+        if "MQTT_HOST" in os.environ:
+            args.host = os.environ["MQTT_HOST"]
+        else:
+            if broker is None:
+                args.host = input("MQTT host name or IP: ")
+
+    if not args.topic:
+        if "MQTT_TOPIC" in os.environ:
+            args.topic = os.environ["MQTT_TOPIC"]
+        else:
+            if topic is None:
+                args.topic = input("MQTT topic: ")
+
+    #  username and password not required, so don't prompt if not already provided
+    #    and port just defaults
+    if not args.username and 'MQTT_USERNAME' in os.environ:
+        args.username = os.environ['MQTT_USERNAME']
+    else:
+        args.username = ""
+
+    if not args.password and 'MQTT_PASSWORD' in os.environ:
+        args.password = os.environ['MQTT_PASSWORD']
+    else:
+        args.password = ""
+
+    if not args.port and 'MQTT_PORT' in os.environ:
+        args.port = os.environ['MQTT_PORT']
+
+    useF     = False if args.degC is not None and args.degC else True
+    tScale = "°F" if useF else "°C"
+    broker   = args.host
+    topic    = args.topic
+    username = args.username
+    password = args.password
+    port     = args.port
+    debug    = args.debug
+    debugW   = args.debug and args.warn
+    if debug:
+        print("Debug is ON")
+        print("Parameter settings in execution are ...")
+        print("\tMQTT host:    ", broker)
+        print("\tMQTT topic:   ", topic)
+        print("\tMQTT username:", username)
+        print("\tMQTT password:", password)
+        print("\tMQTT port:    ", port)
+        print("\tUseF:         ", useF)
+        print("\tDebug warnings", debugW)
+    return
+
+###############################################################################
+# Convert time from various formats to epoch time
+def CnvTime(ts):
+    if ts.find("-") > 0:
+        try:
+            eTime = datetime.datetime.fromisoformat(ts).timestamp()
+        except ValueError as e:
+            err={}
+            print("datetime error in input line converting time string: ", ts)
+            print("datetime  msg:", err.get("error", str(e)))
+            sys.exit(1)
+    else:
+        try:
+            eTime = float(ts)
+        except ValueError as e:
+            err = {}
+            print("Datetime conversion failed on line with datetime string", ts)
+            print("float() error msg:", err.get("error", str(e)))
+            sys.exit(1)
+    return eTime
+
+
+###############################################################################
+# Functions for displaying
+
+# Toggle fullscreen
+def toggle_fullscreen(event=None):
+    global win
+    global fullscreen
+
+    fullscreen = not fullscreen
+    win.attributes('-fullscreen', fullscreen)
+    resize()
+    return
+
+# Automatically resize font size based on window size
+def resize(event=None):
+    global dfont
+    global lfont
+    global win
+
+    # Resize font based on frame height (minimum size of 12)
+    # Use negative number for "pixels" instead of "points"
+    hfont.configure(size=-max(36, int((win.winfo_height() / 18))))
+    dfont.configure(size=-max(24, int((win.winfo_height() / 24))))
+    lfont.configure(size=-max(30, int((win.winfo_height() / 24))))
+
+    return
+
+#######################################################################################
+# Table management and display
+
+def add_row(devnum, loc, temp, hum, flag):
+    global frm_table
+    row = tk.Frame(frm_table)
+    tblrow.append(row)
+    # Color the header row differently
+    if devnum==0:
+        bg = "cornflower blue"
+        fg = "white"
+        fbg= "yellow"
+        ffg= "black"
+    else:
+        bg = "white"
+        fg = "black"
+        fbg= "white"
+        ffg= "black"
+    lbl_loc  = tk.Label(row, width=30, textvariable=loc,  font=dfont, bg=bg, fg=fg)
+    lbl_temp = tk.Label(row, width=7,  textvariable=temp, font=dfont, bg=bg, fg=fg)
+    lbl_hum  = tk.Label(row, width=4,  textvariable=hum,  font=dfont, bg=bg, fg=fg)
+    lbl_flag = tk.Label(row, width=1,  textvariable=flag, font=dfont, bg=fbg, fg=ffg)
+    
+    lbl_loc.grid( row=devnum, column=0, padx=5, pady=5, sticky=tk.W)
+    lbl_temp.grid(row=devnum, column=1, padx=5, pady=5, sticky=tk.E)
+    lbl_hum.grid( row=devnum, column=2, padx=5, pady=5, sticky=tk.E)
+    lbl_flag.grid(row=devnum, column=3, padx=5, pady=5, sticky=tk.E)
+    row.pack(side="top")
+    return (devnum+1, row)
+
+###############################################################################
+# MQTT functions and display updating
+# Connect to  MQTT broker
+def connect_mqtt() -> mqtt_client:
+    global debug
+    def on_connect(mqtt, userdata, flags, rc):
+        if rc == 0:
+            if debug:
+                print("Connected to MQTT Broker!")
+        else:
+            print("Failed attempt to connect to ", mqtt)
+            print("  with userdata ", userdata)
+            print("Return code %d\n", rc)
+
+    mqtt = mqtt_client.Client(client_id, clean_session=False)
+    mqtt.username_pw_set(username, password)
+    mqtt.on_connect = on_connect
+    mqtt.connect(broker, port)
+    subscribe(mqtt)
+    return mqtt
+
+###############################################################################
+# Subscribe to rtl_433 publication & process records we receive
+def subscribe(mqtt: mqtt_client):
+
+    # on_message does the real work
+    # When we get a thermometer reading,
+    #   ignore if it's a duplicate, update display if it isn't
+    def on_message(mqtt, userdata, msg):
+        global pktcnt
+        global devices, devnum, tbl
+
+        def write_display_row_for_device(dev):
+            dRow = devices[dev].dRow
+            try:
+                tbl[dRow][0].set(devices[dev].loc)
+                tbl[dRow][1].set(round(devices[dev].temp,1))
+                tbl[dRow][2].set(devices[dev].hum)
+                tbl[dRow][3].set(devices[dev].warn)
+            except Exception as e:
+                print("Exception when trying to set display values for row", dRow,
+                      "location", loc)
+                print("Exception:", str(e))
+            return
+
+        pktcnt += 1
+        # parse the json payload
+        y = json.loads(msg.payload.decode())
+
+        # Ignore tire pressure monitoring system temp reports
+        if "type" in y and y["type"]=="TPMS":
+            return
+        
+        # If not a device record, just return
+        if "model" not in y:
+            return
+
+        #  Create the device identifier as "model/channel/id"
+        dev = y["model"] + "/"
+        if "channel" in y:
+            dev += str(y["channel"])
+        dev += "/"
+        if "id" in y:
+            dev += str(y["id"])
+
+        # if this is a themometer reading, process it; otherwise just return
+        if "temperature_C" in y.keys():
+            ltemp = y["temperature_C"]
+            if useF:
+                ltemp = ltemp*9.0/5.0+32.0
+        else:
+            if "temperature_F" in y.keys():
+                ltemp = y["temperature_F"]
+                if not useF:
+                    ltemp = (ltemp-32.0)*5.0/9.0
+            else:
+                return   # if no temp reading in record, ignore it
+
+        # OK, we have a temp reading. Get the variables we need
+        eTime   = CnvTime(y["time"])
+        loc     = dev if dev not in location else location[dev]
+        hum     = 0 if "humidity" not in y.keys() else int(y["humidity"])
+        battery = None if "battery_ok" not in y else y["battery_ok"]
+        status  = None if "status"     not in y else y["status"]
+
+        # if debuging warnings, inject warning conditions at pkts 10, 20, 30, 40
+        if debugW:
+            if pktcnt==10 or pktcnt==30:
+                status = 9
+            if pktcnt==20 or pktcnt==40:
+                battery = 0
+        
+        # Got all the values: add or update if not a repeated packet
+        if dev in devices:
+            # See if this is a duplicate (repeated) packet,
+            #   update the values in the dictionary,
+            #   and retrieve location field and display table row number
+            dup = devices[dev].update(eTime, ltemp, hum, battery, status)
+            dRow = devices[dev].dRow
+        else:
+            # Add a new device to the table
+            devices[dev] = Data(devnum, eTime, loc, ltemp, hum, battery, status)
+            # Set values needed for subsequent processing
+            dRow = devnum
+            dup = False
+            # Append the display variables for this row to the display table
+            #   and increment devnum
+            tbl.append( (tk.StringVar(), tk.StringVar(), tk.StringVar(), tk.StringVar()) )
+            # Create the row and point to the display table variables
+            (devnum, row) = add_row(devnum, tbl[devnum][0], tbl[devnum][1], tbl[devnum][2], tbl[devnum][3])
+            # If this device is in the location dictionary, swap the rows in the
+            #   display table so this new "known" device is in its location
+            #   at the top of the display table
+            #  No index method for dictionary, so lookup and count
+            if dev in location:
+                # dev is in the location dictionary: find its position
+                x = 1  # start at 1 because header is row 0 in display table
+                for el in location:
+                    if el == dev:
+                        break
+                    else:
+                        x += 1
+                if debug:
+                    print("Found", dev, "at location dictionary index", x, 
+                          "Swapping table rows ", dRow, "and", x)
+                # Find which device currently uses that display row and swap them
+                for d in devices:
+                    if devices[d].dRow == x:
+                        # found device at that row on display
+                        # now swap display rows and show the prior device in the new display row
+                        devices[d].dRow, devices[dev].dRow = devices[dev].dRow, devices[d].dRow
+                        dRow = x
+                        # And display the new device at display row of old one
+                        write_display_row_for_device(d)
+                        break
+        if not dup:
+            if debug:
+                 print("Updating display table row ", dRow, "for", loc)
+                 print("{:<3d} {:<30} {:<20} {:<30} {:>8.1f}{:2} {:>5}% snr={:>3.0f}".format(
+                     dRow, loc, y["time"], dev, round(ltemp,1), tScale, hum,
+                     0.0 if "snr" not in y else y['snr']) )
+            write_display_row_for_device(dev)
+            return  #From on_message()
+
+    mqtt.subscribe(topic)
+    mqtt.on_message = on_message
+    if debug:
+        print("subscribed to mqtt feed")
+    return #From subscribe()
+
+###############################################################################
+# Reset device warnings to OK and rewrite the display table accordingly
+def reset_warn():
+    mqtt.loop_stop()
+    for dev in devices:
+        devices[dev].battery = 1
+        devices[dev].wlevel  = Warn.OK
+        devices[dev].warn    = Warnings[Warn.OK]
+    for row in range(1, len(tbl)):
+        tbl[row][3].set(Warnings[Warn.OK])
+    mqtt.loop_start()
+    return
+
+###############################################################################
+# CNTL-C and QUIT button handler
+def quit_prog(event=None):
+    mqtt.loop_stop()
+    print()
+    time.sleep(1)      # let events clear (we hope)
+    mqtt.disconnect()
+    win.quit()
+    sys.exit(0)
+
+###############################################################################
+# Create the display panels and table section
+def create_display():    
+    global win, frm_table, dfont, hfont, lfont, devnum
+    # Create the main window
+    win = tk.Tk()
+    win.title("Neighborhood Temperatures")
+
+    # Create dynamic font for text
+    hfont = tkFont.Font(size=-36)
+    dfont = tkFont.Font(size=-24)
+    lfont = tkFont.Font(size=-30, weight="bold")
+
+    # Build the title section of the display
+    frm_title = tk.Frame(win, borderwidth=10, relief="groove")
+    frm_title.pack(side="top", fill="x", expand=False)
+    lbl_title = tk.Label(frm_title, text="Display Neighborhood Temperatures",
+                         font=hfont, bg="cornflower blue", fg="white")
+    lbl_title.pack(anchor="center", fill="x")
+
+    # Build the information section
+    frm_info = tk.Frame(win, borderwidth=5, relief="raised")
+    frm_info.pack(side="top", fill="x", expand=False)
+    lbl_monitor = tk.Label(frm_info, text="Monitoring host: %s" % (broker), font=dfont)
+    btn_wrst    = tk.Button(frm_info, text="WRst",           width=4, height=1,
+                           font=dfont, fg='green',command=reset_warn)
+    btn_toggle = tk.Button(frm_info, text="Togl",           width=4, height=1,
+                           font=dfont, fg='blue', command=toggle_fullscreen)
+    btn_quit   = tk.Button(frm_info, text="Quit",           width=4,  height=1,
+                           font=dfont, fg='red',  command=quit_prog)
+    lbl_monitor.pack(side="left", padx=2, pady=2)
+    btn_quit.pack(side="right")
+    btn_toggle.pack(side="right")
+    btn_wrst.pack(side="right")
+    
+    # And create the table for data display
+    frm_table = DoubleScrolledFrame(win, width=700, borderwidth=5, relief=tk.GROOVE)
+    frm_table.pack(side="top", fill="both", expand=True, padx=5, pady=5)
+
+    # First, the header
+    devnum  = 0
+    tbl.append( (tk.StringVar(), tk.StringVar(), tk.StringVar() , tk.StringVar()) )
+    (devnum, row)  = add_row(devnum, tbl[devnum][0], tbl[devnum][1], tbl[devnum][2], tbl[devnum][3])
+    tbl[0][0].set("Location or Thermometer")
+    tbl[0][1].set("Temp "+tScale)
+    tbl[0][2].set("%RH")
+    tbl[0][3].set("\U000026A0")
+    tblrow.append(row)
+
+    # Have <ESC> toggle window, and call resize() every time the window is resized
+    win.bind('<Escape>', toggle_fullscreen)
+    return
+
+###############################################################################
+# Main script
+
+if __name__ == "__main__":
+
+    t = datetime.datetime.now()
+    signal.signal(signal.SIGINT, quit_prog)
+
+    set_params()
+
+    # Device:Data dictionary
+    devices = {}
+
+    # List of widgets to display
+    tbl = []
+    tblrow = []
+
+    # Create the display
+    create_display()
+    
+    # connect to the mqtt broker and subscribe to the feed.
+    #   MQTT events cause the displayed values to be updated
+    mqtt = connect_mqtt()
+    mqtt.loop_start()
+
+    if debug:
+        print("entering run loop")
+
+    # Start the main loop and let MQTT events populate the display table
+    win.mainloop()
