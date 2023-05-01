@@ -65,23 +65,30 @@ password = ""
 client_id = f'python-mqtt-{random.randint(0, 100)}'
 
 # By default, use Fahrenheit scale for display
-useF=True
+useF   = True
 tScale = "°F"
 
-# Remember if we are fullscreen or windowed; toggle starts fullscreen
-win = None
-frm_table = None
+# Variables and constants used globally
+win        = None
+frm_table  = None
 fullscreen = False
-dfont = None
-hfont = None
-lfont = None
-pktcnt = 0
-debug     = False
-devnum = None
-bl_flag = "\U0000203C"  # '!!': want to use "\U0001FAAB" {low battery} but not available
-st_flag = "\U00002049"  # '?!'
-Warnings = [" ", st_flag, bl_flag]
-Warn = IntEnum('Warn', [ ('OK', 0), ('ALERT', 1), ('ALARM', 2)])
+dfont      = None
+hfont      = None
+lfont      = None
+pktcnt     = 0
+debug      = False
+devnum     = None
+CSIBLK     = "\033[30m"
+CSIRED     = "\033[31m"
+CSIYLW     = "\033[93m"
+CSIMGN     = "\033[95m"
+CSIBLU     = "\033[34m"
+CSIGRN     = "\033[32m"
+Warn_Sign  = "\U000026A0"
+bl_flag    = "\U0000203C"  # '!!': want to use "\U0001FAAB" {low battery} but not available
+st_flag    = "\U00002049"  # '?!'
+Warnings   = [" ", st_flag, bl_flag]
+Warn       = IntEnum('Warn', [ ('OK', 0), ('ALERT', 1), ('ALARM', 2)])
 
 # Set 2-sec threshhold for rejecting duplicate records
 dup_thresh = 2.0
@@ -359,7 +366,7 @@ def add_row(devnum, loc, temp, hum, flag):
     lbl_loc  = tk.Label(row, width=30, textvariable=loc,  font=dfont, bg=bg, fg=fg)
     lbl_temp = tk.Label(row, width=7,  textvariable=temp, font=dfont, bg=bg, fg=fg)
     lbl_hum  = tk.Label(row, width=4,  textvariable=hum,  font=dfont, bg=bg, fg=fg)
-    lbl_flag = tk.Label(row, width=1,  textvariable=flag, font=dfont, bg=fbg, fg=ffg)
+    lbl_flag = tk.Label(row, width=1,  textvariable=flag, font=dfont, bg=fbg,fg=ffg)
     
     lbl_loc.grid( row=devnum, column=0, padx=5, pady=5, sticky=tk.W)
     lbl_temp.grid(row=devnum, column=1, padx=5, pady=5, sticky=tk.E)
@@ -413,7 +420,6 @@ def subscribe(mqtt: mqtt_client):
                 print("Exception:", str(e))
             return
 
-        pktcnt += 1
         # parse the json payload
         y = json.loads(msg.payload.decode())
 
@@ -455,16 +461,17 @@ def subscribe(mqtt: mqtt_client):
 
         # if debuging warnings, inject warning conditions at pkts 10, 20, 30, 40
         if debugW:
-            if pktcnt==10 or pktcnt==30:
+            if pktcnt==10:
                 status = 9
-            if pktcnt==20 or pktcnt==40:
+                print(CSIMGN, "Inserting status-code change for display debugging", CSIBLK)
+            if pktcnt==20:
                 battery = 0
+                print(CSIRED, "Inserting battery-low condition for display debugging", CSIBLK)
         
-        # Got all the values: add or update if not a repeated packet
+        # Got all the values: update if not a repeated packet, or add if new
         if dev in devices:
-            # See if this is a duplicate (repeated) packet,
-            #   update the values in the dictionary,
-            #   and retrieve location field and display table row number
+            # Not a duplicate: update the values in the dictionary
+            #  and retrieve display-table row number
             dup = devices[dev].update(eTime, ltemp, hum, battery, status)
             dRow = devices[dev].dRow
         else:
@@ -504,6 +511,7 @@ def subscribe(mqtt: mqtt_client):
                         write_display_row_for_device(d)
                         break
         if not dup:
+            pktcnt += 1
             if debug:
                  print("Updating display table row ", dRow, "for", loc)
                  print("{:<3d} {:<30} {:<20} {:<30} {:>8.1f}{:2} {:>5}% snr={:>3.0f}".format(
@@ -587,7 +595,7 @@ def create_display():
     tbl[0][0].set("Location or Thermometer")
     tbl[0][1].set("Temp "+tScale)
     tbl[0][2].set("%RH")
-    tbl[0][3].set("\U000026A0")
+    tbl[0][3].set(Warn_Sign)
     tblrow.append(row)
 
     # Have <ESC> toggle window, and call resize() every time the window is resized
