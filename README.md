@@ -1,7 +1,7 @@
 # DNT: Display Neighborhood Temperatures
 ### Display thermometer readings from around your neighborbood
 
-`DNT.py` is a program that uses the output from `rtl_433` to display temperature and humidity readings from remote thermometers around your neighborhood.  Those readings are obtained by using `rtl_433` to monitor the Industrial-Scientific-Medical (ISM) radio-frequency band used by remote devices to communicate with their owners' base stations.  Acurite and LaCrosse indoor/outdoor thermometers are examples of such devices.  `rtl_433` receives and analyzes those broadcast packets.  This program uses the output of `rtl_433` to display the temperature (in Fahrenheit or Celsius) and relative-humidity readings from probes in your neighborhood, across a variety of manufacturers' devices, even if you don't own one of those displays.
+`DNT` is a Python program that uses the output from `rtl_433` to display temperature and humidity readings from remote thermometers around your neighborhood.  Those readings are obtained by using `rtl_433` to monitor the Industrial-Scientific-Medical (ISM) radio-frequency band used by remote devices to communicate with their owners' base stations.  Acurite and LaCrosse indoor/outdoor thermometers are examples of such devices.  `rtl_433` receives and analyzes those broadcast packets.  This program uses the output of `rtl_433` to display the temperature (in Fahrenheit or Celsius) and relative-humidity readings from probes in your neighborhood, across a variety of manufacturers' devices, even if you don't own one of those displays.
 
 
 
