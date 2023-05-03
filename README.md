@@ -1,32 +1,65 @@
 # DNT: Display Neighborhood Temperatures
 ### Display thermometer readings from around your neighborbood
 
-`DNT` is a Python program that uses the output from `rtl_433` to display temperature and humidity readings from remote thermometers around your neighborhood.  Those readings are obtained by using `rtl_433` to monitor the Industrial-Scientific-Medical (ISM) radio-frequency band used by remote devices to communicate with their owners' base stations.  Acurite and LaCrosse indoor/outdoor thermometers are examples of such devices.  `rtl_433` receives and analyzes those broadcast packets.  This program uses the output of `rtl_433` to display the temperature (in Fahrenheit or Celsius) and relative-humidity readings from probes in your neighborhood, across a variety of manufacturers' devices, even if you don't own one of those displays.
+`DNT` is a Python program that uses the output from `rtl_433` to display temperature and humidity readings from remote thermometers around your neighborhood.  
 
+The readings are obtained by using the `rtl_433` program to monitor the Industrial-Scientific-Medical (ISM) radio-frequency band used by remote devices to communicate with their owners' base stations.  Acurite and LaCrosse indoor/outdoor thermometers are examples of such devices.  `rtl_433` receives and analyzes those broadcast packets.  This program uses the output of `rtl_433` to display the temperature (in Fahrenheit or Celsius) and relative-humidity readings from probes in your neighborhood, across a variety of manufacturers' devices, even if you don't own one of those displays.
 
+### Use
+
+`DNT` requires Python3.  The command `./DNT` starts the program and prompts for the name of the `rtl_433` host on your local area network that provides MQTT subscription service.  `./DNT -H <hostname>` starts the program without the prompt.
+
+The program opens a scrollable, resizable display window, appends new remote thermometer devices as they are observed by the `rtl_433` host system, and updates readings as they are reported.
+
+`./DNT -h` provides more information about options.
 
 ## Architecture
 
 This system uses several components, all of which could be hosted on one computer but can also be distributed over several systems:
 
 * The `DNT` Python program itself, which displays the current readings from a set of neighboring remote probes.  `DNT` receives the readings over your local-area network via MQTT from an `rtl_433` monitoring system.  `DNT` can actually run on the monitoring computer itself or on any number of other computers connected to the same local-area network as the monitoring computer.
-* A monitoring system that:
+* A host monitoring system that:
 	* Has an RTL_SDR dongle attached, to receive ISM broadcasts.  In the US, that band is at 433.92MHz, but the devices and software components function across the range of ISM bands used around the world. 
 	* Runs the `rtl_433` program to collect and analyze the ISM packets and publish the analyzed packets as JSON messages via MQTT over your local network.
 	* Runs an MQTT broker to publish the ISM events seen by `rtl_433`.
 
-The components are standard hardware and software components, easily obtained from online sources and well maintained. The only component included here is `DNT`: sources for the other components are provided by reference.
+The components are standard hardware and software components, easily obtained from online sources and well maintained. The only component included here is `DNT`: sources for the other components are provided in sections below.
 
 ## Installation
 
-This system was implemented on Raspberry Pi's running Raspbian, but key components will likely run on any Linux distribution. The `DNT` program also runs on Apple's Mac OSX system with Python3 installed.  It should be possible to install the monitoring system on OSX as well since the software components of the monitoring system are available for Mac (not tried -- use `brew` or `port` to install the MQTT component).
+`DNT` was developed on MacOSX and Raspberry Pi Linux. It should be possible to install the monitoring system on OSX as well since the software components of the monitoring system are available for Mac (not tried -- use `brew` or `port` to install the MQTT component).
 
 The first step is to clone this distribution into a working area.  Connect to a download working directory and then `git clone https://github.com/hdtodd/DNT` to download the display-program file and this README.
 
+If you already have an `rtl_433` host running on your network and publishing events via MQTT, `DNT` is ready to go.  If not, follow the instructions below to set up an `rtl_433` monitoring host.
 
+The monitoring system simply broadcasts the JSON `mqtt` packets on your local network, so any number of other computers on your network can display current readings by running `DNT`.
 
+### Operation and Maintenance
 
-### The Monitoring Computer
+You may have trouble identifying the location of the various thermometer remotes from which your RTL-SDR receives signals.  But you can likely identify those that are closest to you by observing the average signal-to-noise ratio over time and selecting those with the highest SNR for display in your table.  See the section below on how to do that.
+
+**Over time, the "id" number of your dictionary entries will change!**  When the batteries on the remote are depleted, the owner must reinstall new  batteries and re-synch the remote with the indoor thermometer: the "id" changes.  So if your display table starts losing entries, use `mosquitto_sub` or `mqTest` to monitor the devices transmitting in your neighborhood and update the "id" value in the association dictionary accordingly.  Or catalog devices using the method below and edit entries from the list `snr` generates.
+
+You will, over time, need to remove the JSON log file on the monitoring computer (`/var/log/rtl_433/rtl_433.json`).  Or you may want to use `logrotate` to manage those JSON files, in which case `sudo mv rtl_433.logrotate /etc/logrotate.d/rtl_433` on the host monitoring system to compress and manage the log files.
+
+The developers of `rtl_433` continually update the list of devices that the program recognizes, so `git pull`, re-build, and re-install `rtl_433` periodically to add new devices in your neighborhood.
+
+### Cataloging Nearby Devices with `snr`
+
+The `rtl_433.conf` configuration file entry `output json:/var/log/rtl_433/rtl_433.json` in the setup of the monitoring system above creates a log file on that monitoring system of all JSON packets published via `mqtt`.  It can be analyzed to catalog the devices from which the monitoring RTL_SDR dongle has received ISM packets.
+
+Install and invoke the `snr` program:
+
+1. Connect to your download directory and get the `snr` package: `git clone https://github.com/hdtodd/rtl_snr`.
+1. Follow the installation instructions in the README in that package.
+1. Test your local installation with the `xaa.json` file that is provided with the package.
+1. **STOP the monitoring process** with `sudo systemctl stop rtl_433`.  The `rtl_433` program appends JSON records very quickly, and the analysis is more reliable if the log file is not being appended to by `rtl_433`.
+1. Analyze your recorded data with `snr -f /var/log/rtl_433/rtl_433.log > rtl.txt`, then restart `rtl_433` with `sudo systemctl start rtl_433`.
+1. `cat rtl.txt` or `less rtl.txt` to browse the report.  Look, in particular, for thermometer devices with a relatively large number of recorded entries and large SNR values: those are likely devices that are static and near to your location.  [You'll also see tire-pressure gauges, fuel-oil readings, security systems, etc.]
+1. Use the information from the `snr` catalog to update the "model+id"-label association dictionary at the beginning of the `DNT.py` code.
+
+## The Monitoring Computer
 Perform these steps on the computer you intend to use to monitor the ISM-band radio signals.
 
 1. If you don't already have one, purchase an RTL-SDR receiver.  Use your favorite search engine to search for "rtl sdr receiver".  They cost about $30US.  But be sure to get one with an antenna appropriate for your region's ISM frequency band.  Then you simply plug it in to a USB port on your monitoring computer.
@@ -49,7 +82,7 @@ Perform these steps on the computer you intend to use to monitor the ISM-band ra
 	* Now, whenever the monitoring system is rebooted, it will restart the rtl_433 service and the mqtt service needed to broadcast in JSON format the information received by the RTL\_433 dongle as ISM packets.
 
 ### Displaying Temperatures
-The `DNT.py` program was designed to run on a Raspberry Pi 7" touchscreen display, but it will function on any system for which the `tkinter` library is available.  It has been tested on both Raspbian and Mac OSX on which Python3 had been installed.
+The `DNT` program was designed to run on a Raspberry Pi 7" touchscreen display, but it will function on any system for which the `tkinter` library is available. 
 
 Perform these steps on the computers you intend to use to display temperatures from neighborhood thermometer remotes:
 
@@ -69,33 +102,9 @@ Perform these steps on the computers you intend to use to display temperatures f
 	* `sudo cp DNT.png /usr/local/share/pixmaps/`
 	* `cp DNT.desktop ~/Desktop/`
 
-## Operation and Maintenance
-The monitoring system simply broadcasts the JSON `mqtt` packets on your local network, so any number of other computers on your network can display current readings by running `DNT.py`.
-
-You may have trouble identifying the location of the various thermometer remotes from which your RTL-SDR receives signals.  But you can likely identify those that are closest to you by observing the average signal-to-noise ratio over time and selecting those with the highest SNR for display in your table.  See the section below on how to do that.
-
-**Over time, the "id" number of your dictionary entries will change!**  When the batteries on the remote are depleted, the owner must reinstall new  batteries and re-synch the remote with the indoor thermometer: the "id" changes.  So if your display table starts losing entries, use `mosquitto_sub` or `mqTest.py` to monitor the devices transmitting in your neighborhood and update the "id" value in the association dictionary accordingly.  Or catalog devices using the method below and edit entries from the list `snr` generates.
-
-You will, over time, need to remove the JSON log file on the monitoring computer (`/var/log/rtl_433/rtl_433.json`).  Or you may want to use `logrotate` to manage those JSON files, in which case `sudo mv rtl_433.logrotate /etc/logrotate.d/rtl_433`.
-
-The developers of `rtl_433` continually update the list of devices that the program recognizes, so `git pull`, re-build, and re-install `rtl_433` periodically to add new devices in your neighborhood.
-
-## Cataloging Nearby Devices with `snr`
-
-The `rtl_433.conf` configuration file entry `output json:/var/log/rtl_433/rtl_433.json` in the setup of the monitoring system above creates a log file on that monitoring system of all JSON packets published via `mqtt`.  It can be analyzed to catalog the devices from which the monitoring RTL_SDR dongle has received ISM packets.
-
-Install and invoke the `snr` program:
-
-1. Connect to your download directory and get the `snr` package: `git clone https://github.com/hdtodd/rtl_snr`.
-1. Follow the installation instructions in the README in that package.
-1. Test your local installation with the `xaa.json` file that is provided with the package.
-1. **STOP the monitoring process** with `sudo systemctl stop rtl_433`.  The `rtl_433` program appends JSON records very quickly, and the analysis is more reliable if the log file is not being appended to by `rtl_433`.
-1. Analyze your recorded data with `snr -f /var/log/rtl_433/rtl_433.log > rtl.txt`, then restart `rtl_433` with `sudo systemctl start rtl_433`.
-1. `cat rtl.txt` or `less rtl.txt` to browse the report.  Look, in particular, for thermometer devices with a relatively large number of recorded entries and large SNR values: those are likely devices that are static and near to your location.  [You'll also see tire-pressure gauges, fuel-oil readings, security systems, etc.]
-1. Use the information from the `snr` catalog to update the "model+id"-label association dictionary at the beginning of the `DNT.py` code.
 
 ## Outstanding Issues
-On occasion, clicking the "Quit" button fails to shut down `DNT.py` on Mac OSX.  This appears to be a Python GIL issue caused by interaction between `tkinter` and `mqtt` loops.  Feedback and suggested solutions would be welcome.
+On occasion, clicking the "Quit" button fails to shut down `DNT` on Mac OSX.  This appears to be a Python GIL issue caused by interaction between `tkinter` and `mqtt` loops.  Feedback and suggested solutions would be welcome.
 
 ## Author
-Written by David Todd, hdtodd@gmail.com, 2023.02.
+Written by David Todd, hdtodd@gmail.com, 2023.04.
