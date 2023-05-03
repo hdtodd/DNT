@@ -77,7 +77,6 @@ hfont      = None
 lfont      = None
 pktcnt     = 0
 debug      = False
-devnum     = None
 CSIBLK     = "\033[30m"
 CSIRED     = "\033[31m"
 CSIYLW     = "\033[93m"
@@ -348,12 +347,12 @@ def resize(event=None):
 #######################################################################################
 # Table management and display
 
-def add_row(devnum, loc, temp, hum, flag):
-    global frm_table
+def add_row(dRow):
+    global frm_table, tbl
+    tbl.append( (tk.StringVar(), tk.StringVar(), tk.StringVar() , tk.StringVar()) )
     row = tk.Frame(frm_table)
-    tblrow.append(row)
     # Color the header row differently
-    if devnum==0:
+    if dRow==0:
         bg = "cornflower blue"
         fg = "white"
         fbg= "yellow"
@@ -363,17 +362,17 @@ def add_row(devnum, loc, temp, hum, flag):
         fg = "black"
         fbg= "white"
         ffg= "black"
-    lbl_loc  = tk.Label(row, width=30, textvariable=loc,  font=dfont, bg=bg, fg=fg)
-    lbl_temp = tk.Label(row, width=7,  textvariable=temp, font=dfont, bg=bg, fg=fg)
-    lbl_hum  = tk.Label(row, width=4,  textvariable=hum,  font=dfont, bg=bg, fg=fg)
-    lbl_flag = tk.Label(row, width=1,  textvariable=flag, font=dfont, bg=fbg,fg=ffg)
+    lbl_loc  = tk.Label(row, width=30, textvariable=tbl[dRow][0], font=dfont, bg=bg, fg=fg)
+    lbl_temp = tk.Label(row, width=7,  textvariable=tbl[dRow][1], font=dfont, bg=bg, fg=fg)
+    lbl_hum  = tk.Label(row, width=4,  textvariable=tbl[dRow][2], font=dfont, bg=bg, fg=fg)
+    lbl_flag = tk.Label(row, width=1,  textvariable=tbl[dRow][3], font=dfont, bg=fbg,fg=ffg)
     
-    lbl_loc.grid( row=devnum, column=0, padx=5, pady=5, sticky=tk.W)
-    lbl_temp.grid(row=devnum, column=1, padx=5, pady=5, sticky=tk.E)
-    lbl_hum.grid( row=devnum, column=2, padx=5, pady=5, sticky=tk.E)
-    lbl_flag.grid(row=devnum, column=3, padx=5, pady=5, sticky=tk.E)
+    lbl_loc.grid( row=dRow, column=0, padx=5, pady=5, sticky=tk.W)
+    lbl_temp.grid(row=dRow, column=1, padx=5, pady=5, sticky=tk.E)
+    lbl_hum.grid( row=dRow, column=2, padx=5, pady=5, sticky=tk.E)
+    lbl_flag.grid(row=dRow, column=3, padx=5, pady=5, sticky=tk.E)
     row.pack(side="top")
-    return (devnum+1, row)
+    return dRow+1
 
 ###############################################################################
 # MQTT functions and display updating
@@ -405,7 +404,7 @@ def subscribe(mqtt: mqtt_client):
     #   ignore if it's a duplicate, update display if it isn't
     def on_message(mqtt, userdata, msg):
         global pktcnt
-        global devices, devnum, tbl
+        global devices, tbl
 
         def write_display_row_for_device(dev):
             dRow = devices[dev].dRow
@@ -476,15 +475,11 @@ def subscribe(mqtt: mqtt_client):
             dRow = devices[dev].dRow
         else:
             # Add a new device to the table
-            devices[dev] = Data(devnum, eTime, loc, ltemp, hum, battery, status)
-            # Set values needed for subsequent processing
-            dRow = devnum
+            dRow = len(tbl)
+            devices[dev] = Data(dRow, eTime, loc, ltemp, hum, battery, status)
             dup = False
-            # Append the display variables for this row to the display table
-            #   and increment devnum
-            tbl.append( (tk.StringVar(), tk.StringVar(), tk.StringVar(), tk.StringVar()) )
-            # Create the row and point to the display table variables
-            (devnum, row) = add_row(devnum, tbl[devnum][0], tbl[devnum][1], tbl[devnum][2], tbl[devnum][3])
+            dRow = add_row(dRow)
+            # Create the row and point to the display table variables and increment dRow
             # If this device is in the location dictionary, swap the rows in the
             #   display table so this new "known" device is in its location
             #   at the top of the display table
@@ -552,7 +547,7 @@ def quit_prog(event=None):
 ###############################################################################
 # Create the display panels and table section
 def create_display():    
-    global win, frm_table, dfont, hfont, lfont, devnum
+    global win, frm_table, dfont, hfont, lfont
     # Create the main window
     win = tk.Tk()
     win.title("Neighborhood Temperatures")
@@ -589,14 +584,11 @@ def create_display():
     frm_table.pack(side="top", fill="both", expand=True, padx=5, pady=5)
 
     # First, the header
-    devnum  = 0
-    tbl.append( (tk.StringVar(), tk.StringVar(), tk.StringVar() , tk.StringVar()) )
-    (devnum, row)  = add_row(devnum, tbl[devnum][0], tbl[devnum][1], tbl[devnum][2], tbl[devnum][3])
+    dRow  = add_row(0)
     tbl[0][0].set("Location or Thermometer")
     tbl[0][1].set("Temp "+tScale)
     tbl[0][2].set("%RH")
     tbl[0][3].set(Warn_Sign)
-    tblrow.append(row)
 
     # Have <ESC> toggle window, and call resize() every time the window is resized
     win.bind('<Escape>', toggle_fullscreen)
@@ -617,7 +609,6 @@ if __name__ == "__main__":
 
     # List of widgets to display
     tbl = []
-    tblrow = []
 
     # Create the display
     create_display()
