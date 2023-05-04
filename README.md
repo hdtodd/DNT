@@ -5,6 +5,9 @@
 
 The readings are obtained from the `rtl_433` program that monitors the Industrial-Scientific-Medical (ISM) radio-frequency band used by remote devices to communicate with their owners' base stations.  Acurite and LaCrosse indoor/outdoor thermometers are examples of such devices.  `rtl_433` receives and analyzes those broadcast packets.  `DNT` uses the output of `rtl_433` to display the temperature (in Fahrenheit or Celsius) and relative-humidity readings from probes in your neighborhood, across a variety of manufacturers' devices, even if you don't own those displays.
 
+<img width="748" alt="image" src="https://user-images.githubusercontent.com/5464284/236265077-57af447f-7258-4b07-8ca4-7473b459f953.png">
+
+
 ## Use
 
 `DNT` requires Python3 and Paho-MQTT on the displaying computer and an `rtl_433` system running on your local area network (description in subsequent section).
@@ -68,6 +71,7 @@ Then perform these steps on the computers you intend to use to display temperatu
 	* Run `./DNT` by issuing that command in a terminal window on an XWindows display.  If you want temperatures in Celsius, use the command `DNT -C`.  Over several minutes, the list on the screen will be populated, then regularly updated, with thermometer readings.  The frequency of updating varies by manufacturer and model, but readings are usually reported every 30-to-60 seconds, so individual lines in the display will be updated at different frequencies.
 	* `rtl_433` reports the model, channel, and id number of the devices it sees, but those identifiers might not be familiar to you.  `DNT` has a small dictionary of thermometers you might want to watch and label with familiar names such as "porch" or "Schmidts".  Those identifier-label associations are listed as a dictionary near the beginning of the `DNT` code.  The thermometers are identified by keyword constructed from a model name, channel used, and a model id, as a single concatenated string.  Near the beginning of the `DNT` code is a dictionary of "model/channel/id" keywords and an associated location label. If you know the "model/channel/id" for your own thermometer remote, or that of neighbors, edit the "model/channel/id" keyword and corresponding location label to identify those. If present, the "location" value will be displayed in the data table and listed at the top of the table. 
 1. If you want to be able to start `DNT` by touching or clicking an icon on your Linux desktop, perform these additional steps from the `DNT` installation directory:
+	* Edit the file `DNT.desktop` to append `-H <hostname>` and any other needed MQTT parameters to the invocation of `/usr/local/bin/DNT`. 
 	* If you want readings in Celsius, edit the file `DNT.desktop` to add ` -C` at the end of the DNT command line.
 	* `sudo mkdir -p /usr/local/bin`
 	* `sudo mkdir -p /usr/local/share/pixmaps`
