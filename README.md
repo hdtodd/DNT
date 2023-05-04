@@ -36,6 +36,8 @@ If you've configured `DNT` to associate the thermometer identifier with location
 1.  *Battery Low* is indicated by "!!" in the warning flags column.  Though not universally standard, devices generally indicate an impending low-battery condition by changing the `battery_low` flag from 1 to 0 in its broadcast packets.  *Any* occurence of `battery_low` = 0 causes `DNT` to post the "!!" warning flag for that device.  That flag is sticky: the warning flag remains, even if `battery_low` returns to 1, since the battery voltage may be fluctuating with ambient temperature and the device may need attention in any case.
 1. *Status Change* is indicated by "?!" in the warning flags column.  The remote-device status field is not present in the packets for all devices and is not standardized.  But a change in status may indicate that the device needs attention and so is flagged.  The "Status Change" flag is also sticky: once set for a device, it remains set despite any subsequent changes in packet status field values.
 
+*Battery Low* takes precedence over *Status Change*, so only "!!" will be displayed if the battery-low flag has been seen even if a status-change has occurred.
+
 The "WRst" button clears both the battery-low and status-change flags for *all* devices.  If warning flags reappear after a reset, they are due to new warning conditions appearing for the device. 
 
 
