@@ -5,6 +5,9 @@
 
 The readings are obtained from the `rtl_433` program that monitors the Industrial-Scientific-Medical (ISM) radio-frequency band used by remote devices to communicate with their owners' base stations.  Acurite and LaCrosse indoor/outdoor thermometers are examples of such devices.  `rtl_433` receives and analyzes those broadcast packets.  `DNT` uses the output of `rtl_433` to display the temperature (in Fahrenheit or Celsius) and relative-humidity readings from probes in your neighborhood, across a variety of manufacturers' devices, even if you don't own those displays.
 
+<img width="748" alt="image" src="https://user-images.githubusercontent.com/5464284/236265077-57af447f-7258-4b07-8ca4-7473b459f953.png">
+
+
 ## Use
 
 `DNT` requires Python3 and Paho-MQTT on the displaying computer and an `rtl_433` system running on your local area network (description in subsequent section).
