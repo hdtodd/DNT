@@ -3,15 +3,41 @@
 
 `DNT` is a Python program that uses the output from `rtl_433` to display temperature and humidity readings from remote thermometers around your neighborhood.  
 
-The readings are obtained by using the `rtl_433` program to monitor the Industrial-Scientific-Medical (ISM) radio-frequency band used by remote devices to communicate with their owners' base stations.  Acurite and LaCrosse indoor/outdoor thermometers are examples of such devices.  `rtl_433` receives and analyzes those broadcast packets.  This program uses the output of `rtl_433` to display the temperature (in Fahrenheit or Celsius) and relative-humidity readings from probes in your neighborhood, across a variety of manufacturers' devices, even if you don't own one of those displays.
+The readings are obtained from the `rtl_433` program that monitors the Industrial-Scientific-Medical (ISM) radio-frequency band used by remote devices to communicate with their owners' base stations.  Acurite and LaCrosse indoor/outdoor thermometers are examples of such devices.  `rtl_433` receives and analyzes those broadcast packets.  `DNT` uses the output of `rtl_433` to display the temperature (in Fahrenheit or Celsius) and relative-humidity readings from probes in your neighborhood, across a variety of manufacturers' devices, even if you don't own those displays.
 
-### Use
+## Use
 
-`DNT` requires Python3.  The command `./DNT` starts the program and prompts for the name of the `rtl_433` host on your local area network that provides MQTT subscription service.  `./DNT -H <hostname>` starts the program without the prompt.
+`DNT` requires Python3 and Paho-MQTT on the displaying computer and an `rtl_433` system running on your local area network (description in subsequent section).
 
-The program opens a scrollable, resizable display window, appends new remote thermometer devices as they are observed by the `rtl_433` host system, and updates readings as they are reported.
+If your system already has the required components, the command `./DNT` is all that's needed to display local temperatures.  `./DNT` starts the program and  prompts for the name of the `rtl_433` host on your local area network that provides MQTT subscription service.  `./DNT -H <hostname>` starts the program without the prompt.
 
-`./DNT -h` provides more information about options.
+The program opens a scrollable, resizable display window with columns for the thermometer identity, temperature, humidity, and warning flags; appends new remote thermometer devices and associated data as they are observed by the `rtl_433` host system; and updates subsequent readings as they are reported.
+
+`./DNT -h` provides more information about command-line options.  Additional configuration options are described in a later section.
+
+## The Display Window
+
+In its upper panel, the display window indicates the `rtl_433` host that it is monitoring.  It also provides three buttons:
+
+1.  "WRst" is the *Warning Reset* button: it clears the warning flags for all devices (the last column of the data display -- see below).
+1. "Togl" toggles the display window between full screen and reduced size.
+1. "Quit" exits the program.  (CNTL-C in the controlling terminal window also works) 
+
+The data panel lists the location ("familiar name" -- see configuration section below) or thermometer identifier, temperature (Celsius or Fahrenheit), % relative humidity, and warning flags for each individual thermometer seen.
+
+The thermometer identifier is a concatenation of "model"/"channel"/"id" as reported by `rtl_433` and looks something like "Acurite-Tower/A/11524".  Unless you've configured `DNT` to associate the thermometer identifier with a "familiar name" or "location", the data display will list devices in the order in which they were observed by `rtl_433` beginning when `DNT` first started seeing MQTT events.
+
+If you've configured `DNT` to associate the thermometer identifier with location, those devices will be moved to the top of the display list as they're observed by `rtl_433`.
+
+### Warning Flags
+
+`DNT` monitors packets decoded by `rtl_433` for two signals that might indicate that maintenance of a remote sensor is needed:
+
+1.  *Battery Low* is indicated by "!!" in the warning flags column.  Though not universally standard, devices generally indicate an impending low-battery condition by changing the `battery_low` flag from 1 to 0 in its broadcast packets.  *Any* occurence of `battery_low` = 0 causes `DNT` to post the "!!" warning flag for that device.  That flag is sticky: the warning flag remains, even if `battery_low` returns to 1, since the battery voltage may be fluctuating with ambient temperature and the device may need attention in any case.
+1. *Status Change* is indicated by "?!" in the warning flags column.  The remote-device status field is not present in the packets for all devices and is not standardized.  But a change in status may indicate that the device needs attention and so is flagged.  The "Status Change" flag is also sticky: once set for a device, it remains set despite any subsequent changes in packet status field values.
+
+The "WRst" button clears both the battery-low and status-change flags for *all* devices.  If warning flags reappear after a reset, they are due to new warning conditions appearing for the device. 
+
 
 ## Architecture
 
@@ -27,23 +53,54 @@ The components are standard hardware and software components, easily obtained fr
 
 ## Installation
 
-`DNT` was developed on MacOSX and Raspberry Pi Linux. It should be possible to install the monitoring system on OSX as well since the software components of the monitoring system are available for Mac (not tried -- use `brew` or `port` to install the MQTT component).
+`DNT` was developed on MacOSX and Raspberry Pi OS and should function on any system that supports the requisite Python3, tkinter, and Paho-MQTT components. The `DNT` program was originally designed to run on a Raspberry Pi 7" touchscreen display but functions equally well on a large display.
 
-The first step is to clone this distribution into a working area.  Connect to a download working directory and then `git clone https://github.com/hdtodd/DNT` to download the display-program file and this README.
+If you already have an `rtl_433` host running on your network and publishing events via MQTT, `DNT` is ready to go.  If not, follow the instructions in the section below to set up an `rtl_433` monitoring host.
 
-If you already have an `rtl_433` host running on your network and publishing events via MQTT, `DNT` is ready to go.  If not, follow the instructions below to set up an `rtl_433` monitoring host.
+Then perform these steps on the computers you intend to use to display temperatures from neighborhood thermometer remotes:
 
-The monitoring system simply broadcasts the JSON `mqtt` packets on your local network, so any number of other computers on your network can display current readings by running `DNT`.
+1. If you haven't already done so, download this package: `git clone https://github.com/hdtodd/DNT` on a system that will run XWindows and has a touchscreen or has a keyboard/mouse/display attached.  The remaining work is on that system.
+1. Install the Python3 `mqtt` library used to receive the `mqtt` JSON packets from the monitoring system over your local network: `pip3 install paho-mqtt`.  
+1. Start up the MQTT verification program: `./mqTest`, and provide the name of the `rtl_433` monitoring host on your local area network. If your monitoring system is in operation, `mqTest` will simply type out on the terminal screen the information about the packets that the monitoring system is receiving via the RTL\_SDR dongle and publishing via `mqtt`.  If it isn't working, but testing with `mosquitto_sub` is working on your monitoring system, add command-line parameters  to `mqTest` to identify the correct host, topic, port and (if secured) username and password needed for the host computer MQTT subscription. `DNT` relies on the same connection system as `mqTest`.  The terminal output line includes the signal-to-noise ratio (SNR) reported by `rtl_433`: those with a higher SNR are likely closer to you in proximity, and those with an SNR greater than 15-20 are likely your closest neighbors.
+1. Finally, test `DNT`:
+	* `rtl_433` reports the model, channel, and id number of the devices it sees, but those identifiers might not be familiar to you.  `DNT` has a small table of thermometers you might want to watch and label with familiar names such as "porch" or "Schmidts".  Those identifier-label associations are listed as a dictionary near the beginning of the `DNT` code.  The thermometers are identified by keyword constructed from a model name and a model id, as a single concatenated string.  Near the beginning of the `DNT` code is a dictionary of "model/channel/id" keywords and an associated label. If you know the "model/channel/id" for your own thermometer remote, or that of neighbors, edit the "model/channel/id" keyword and corresponding label to identify those.  Otherwise, observe some of the "model", "channel", and "id" values in packets reported by `mosquitto_sub` or `mqTest.py` and enter "model/channel/id" those keyword and label values in that dictionary.
+	* Run `./DNT` by issuing that command in a terminal window on an XWindows display.  If you want temperatures in Celsius, use the command `DNT -C`.  Over several minutes, the list on the screen will be populated, then regularly updated, with thermometer readings.  The frequency of updating varies by manufacturer and model, but readings are usually reported every 30-to-60 seconds, so individual lines in the display will be updated at different frequencies.
+1. If you want to be able to start `DNT` by touching or clicking an icon on your desktop, perform these additional steps from the `DNT` installation directory:
+	* If you want readings in Celsius, edit the file `DNT.desktop` to add ` -C` at the end of the DNT command line.
+	* `sudo mkdir -p /usr/local/bin`
+	* `sudo mkdir -p /usr/local/share/pixmaps`
+	* `mkdir ~/Desktop`
+	* `sudo cp DNT /usr/local/bin/`
+	* `sudo cp DNT.png /usr/local/share/pixmaps/`
+	* `cp DNT.desktop ~/Desktop/`
+
+### Providing MQTT parameters
+
+DNT requires information about the `rtl_433` MQTT publishing host:
+
+*  MQTT host name
+*  MQTT topic
+*  MQTT login username [if MQTT is secured] 
+*  MQTT login password [if MQTT is secured] 
+*  host MQTT port [if the MQTT port is not the 1883 standard]
+
+All but the host name are set to default values and may not need to be changed.  But if your `rtl_433` host MQTT broker parameters are set differently, these parameters may be provided in four different ways.  In decreasing order of precedence:
+
+1.  Command line switches [-H, -T, -U,-P, -p] override all other sources to specify HOST, TOPIC, USER, PASSWORD, or PORT, respectively.
+2.  These environment variables override internal variable assignments and avoid prompting:
+	*  MQTT\_HOST
+	*  MQTT\_TOPIC
+	*  MQTT\_USER (defaults to \"\" if not specified and not provided on command line)
+	*  MQTT\_PASSWORD (defaults to \"\" if not specified and not provided on command line)
+	*  MQTT\_PORT (defaults to 1883 if not specified and not provided on command line)
+3.  The required parameter values can be assigned within the program source code.   Default values are  set near the beginning of the DNT source code.
+4. If not specified on command line, provided via environment, or set as internal variable assignments in the Python source code, the program prompts for HOST and assigns defaults to TOPIC, USER, PASSWORD, and PORT.
 
 ### Operation and Maintenance
 
 You may have trouble identifying the location of the various thermometer remotes from which your RTL-SDR receives signals.  But you can likely identify those that are closest to you by observing the average signal-to-noise ratio over time and selecting those with the highest SNR for display in your table.  See the section below on how to do that.
 
 **Over time, the "id" number of your dictionary entries will change!**  When the batteries on the remote are depleted, the owner must reinstall new  batteries and re-synch the remote with the indoor thermometer: the "id" changes.  So if your display table starts losing entries, use `mosquitto_sub` or `mqTest` to monitor the devices transmitting in your neighborhood and update the "id" value in the association dictionary accordingly.  Or catalog devices using the method below and edit entries from the list `snr` generates.
-
-You will, over time, need to remove the JSON log file on the monitoring computer (`/var/log/rtl_433/rtl_433.json`).  Or you may want to use `logrotate` to manage those JSON files, in which case `sudo mv rtl_433.logrotate /etc/logrotate.d/rtl_433` on the host monitoring system to compress and manage the log files.
-
-The developers of `rtl_433` continually update the list of devices that the program recognizes, so `git pull`, re-build, and re-install `rtl_433` periodically to add new devices in your neighborhood.
 
 ### Cataloging Nearby Devices with `snr`
 
@@ -60,6 +117,8 @@ Install and invoke the `snr` program:
 1. Use the information from the `snr` catalog to update the "model+id"-label association dictionary at the beginning of the `DNT.py` code.
 
 ## The Monitoring Computer
+These instructions are for a Linux system.  It should be possible to install the monitoring system on OSX as well since the software components of the monitoring system are available for Mac (not tried -- use `brew` or `port` to install the MQTT component).
+
 Perform these steps on the computer you intend to use to monitor the ISM-band radio signals.
 
 1. If you don't already have one, purchase an RTL-SDR receiver.  Use your favorite search engine to search for "rtl sdr receiver".  They cost about $30US.  But be sure to get one with an antenna appropriate for your region's ISM frequency band.  Then you simply plug it in to a USB port on your monitoring computer.
@@ -81,27 +140,9 @@ Perform these steps on the computer you intend to use to monitor the ISM-band ra
 	* `sudo systemctl enable rtl_433` and `sudo systemctl start rtl_433` to enable and start the service
 	* Now, whenever the monitoring system is rebooted, it will restart the rtl_433 service and the mqtt service needed to broadcast in JSON format the information received by the RTL\_433 dongle as ISM packets.
 
-### Displaying Temperatures
-The `DNT` program was designed to run on a Raspberry Pi 7" touchscreen display, but it will function on any system for which the `tkinter` library is available. 
+You will, over time, need to remove the JSON log file on the monitoring computer (`/var/log/rtl_433/rtl_433.json`).  Or you may want to use `logrotate` to manage those JSON files, in which case `sudo mv rtl_433.logrotate /etc/logrotate.d/rtl_433` on the host monitoring system to compress and manage the log files.
 
-Perform these steps on the computers you intend to use to display temperatures from neighborhood thermometer remotes:
-
-1. If you haven't already done so, download this package: `git clone https://github.com/hdtodd/DNT` on a system that will run XWindows and has a touchscreen or has a keyboard/mouse/display attached.  The remaining work is on that system.
-1. Install the Python3 `mqtt` library used to receive the `mqtt` JSON packets from the monitoring system over your local network: `pip3 install paho-mqtt`.  
-1. Edit the python files to install the hostname of the monitoring system on your local network: `sed s/\<mymonitor\>/xxxx/mqTest.py.template > mqTest.py` and `sed s/\<mymonitor\>/xxxx/ DNT.py.template > DNT.py`, where "xxxx" is the hostname of your local monitor,  to replace the placeholder "\<mymonitor\>" with the name of your local host, "xxxx".  (Or just edit the files to change those names). If you secured your mqtt publishing, you'll need to provide the username and password for that service by editing those Python files.
-1. Now start it up: `python3 mqTest.py`.  If your monitoring system is in operation, `mqTest` will simply type out on the terminal screen the information about the packets that the monitoring system is receiving via the RTL\_SDR dongle and publishing via `mqtt`.  If it isn't working, but testing with `mosquitto_sub` is working on your monitoring system, check parameters in `mqTest` and try the `mosquitto_sub` command on that display computer, adjusting parameters until `mqTest` functions correctly.  `DNT.py` relies on the same connection system as `mqTest`.  The terminal output line includes the signal-to-noise ratio (SNR) reported by `rtl_433`: those with a higher SNR are likely closer to you in proximity, and those with an SNR greater than 15-20 are likely your closest neighbors.
-1. Finally, test `DNT.py`:
-	* `rtl_433` reports the model and id number of the devices it sees, but those identifiers might not be familiar to you.  `DNT.py` has a small table of thermometers you might want to watch and label with familiar names such as "porch" or "Schmidts".  Those identifier-label associations are listed as a dictionary near the beginning of the `DNT.py` code.  The thermometers are identified by keyword constructed from a model name and a model id, as a single concatenated string.  Near the beginning of the `DNT.py` code is a dictionary of "model+id" keywords and an associated label. If you know the "model+id" for your own thermometer remote, or that of neighbors, edit the "model+id" keyword and corresponding label to identify those.  Otherwise, observe some of the "model" and "id" values in packets reported by `mosquitto_sub` or `mqTest.py` and enter "model+id" as both keyword and label values in that dictionary.
-	* Run `python3 DNT.py` by issuing that command in a terminal window on an XWindows display.  If you want temperatures in Celsius, use the command `python3 DNT.py -c` or in `DNT.py`, set `useF=False` in the initialization section.  Over several minutes, the list on the screen will be populated, then regularly updated, with thermometer readings.  The frequency of updating varies by manufacturer and model, but readings are usually reported every 30-to-60 seconds, so individual lines in the display will be updated at different frequencies.
-1. If you want to be able to start `DNT.py` by touching or clicking an icon on your desktop, perform these additional steps from the `DNT` installation directory:
-	* If you want readings in Celsius, edit the file `NT.desktop` to add ` -c` at the end of the DNT.py command line.
-	* `sudo mkdir -p /usr/local/bin`
-	* `sudo mkdir -p /usr/local/share/pixmaps`
-	* `mkdir ~/Desktop`
-	* `sudo cp DNT.py /usr/local/bin/`
-	* `sudo cp DNT.png /usr/local/share/pixmaps/`
-	* `cp DNT.desktop ~/Desktop/`
-
+The developers of `rtl_433` continually update the list of devices that the program recognizes, so `git pull`, re-build, and re-install `rtl_433` periodically to add recognition of new devices in your neighborhood.
 
 ## Outstanding Issues
 On occasion, clicking the "Quit" button fails to shut down `DNT` on Mac OSX.  This appears to be a Python GIL issue caused by interaction between `tkinter` and `mqtt` loops.  Feedback and suggested solutions would be welcome.
