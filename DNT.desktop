@@ -3,7 +3,7 @@ Comment=Display Neighborhood Temperatures launcher
 Terminal=false
 Name=DNT
 Type=Application
-Exec=/usr/bin/python3 /usr/local/bin/DNT.py
+Exec=/usr/local/bin/DNT
 Icon=/usr/local/share/pixmaps/DNT.png
 
 
