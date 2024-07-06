@@ -2,8 +2,9 @@
 
 This release adds information about the thermometers observed to the display:
 
-* Alert and warning status flags for changes in the condition of the remote thermometers
-* xxx
+* Alert and warning status flags for changes in the condition of the remote thermometers are noted by "!"
+* Low-battery warnings are noted by "!!"
+* The "WRst" button on the table resets the warnings.
 
 This release also streamlines the installation and on-going operation configuration by using environment variables and command-line parameters to configure DNT for the local rtl\_433 MQTT host server.
 
@@ -26,7 +27,7 @@ These parameters may be provided in four different ways.  In decreasing order of
 	*  MQTT\_USER (defaults to \"\" if not specified and not provided on command line)
 	*  MQTT\_PASSWORD (defaults to \"\" if not specified and not provided on command line)
 	*  MQTT\_PORT (defaults to 1883 if not specified and not provided on command line)
-3.  The required parameter values can be assigned within the program source code.   ocation noted at the beginning of the program)
+3. The required parameter values can be assigned within the program source code.  (Location noted at the beginning of the program)
 4. If not specified on command line, provided via environment, or set as internal variable assignments in the Python source code, the program prompts for HOST and TOPIC and assigns defaults to USER, PASSWORD, and PORT.
 
 
