@@ -387,8 +387,11 @@ def connect_mqtt() -> mqtt_client:
             print("  with userdata ", userdata)
             print("Return code %d\n", rc)
             sys.exit(1)
-
-    mqtt = mqtt_client.Client(client_id, clean_session=False)
+# Work around paho-mqtt v1, v2+ Client instantiation parameter diffs
+    try:
+        mqtt = mqtt_client.Client(client_id, clean_session=False)
+    except:
+        mqtt = mqtt_client.Client(mqtt_client.CallbackAPIVersion.VERSION1, client_id, clean_session=False)
     mqtt.username_pw_set(username, password)
     mqtt.on_connect = on_connect
     mqtt.connect(host, port)

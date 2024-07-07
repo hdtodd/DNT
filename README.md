@@ -1,4 +1,4 @@
-# DNT: Display Neighborhood Temperatures
+# DNT: Display Neighborhood Temperatures Version 2.2
 ### Display thermometer readings from around your neighborbood
 
 `DNT` is a Python program that uses the output from `rtl_433` to display temperature and humidity readings from remote thermometers around your neighborhood.  
@@ -7,10 +7,9 @@ The readings are obtained from the `rtl_433` program that monitors the Industria
 
 <img width="748" alt="image" src="https://user-images.githubusercontent.com/5464284/236265077-57af447f-7258-4b07-8ca4-7473b459f953.png">
 
-
 ## Use
 
-`DNT` requires Python3 and Paho-MQTT on the displaying computer and an `rtl_433` system running on your local area network (description in subsequent section).
+`DNT` requires Python3 and Paho-MQTT on the displaying computer and an `rtl_433` system running on your local area network (description in subsequent section).  Paho-MQTT v2 broke v1 callback invocations, but v2.2 of `DNT` incorporates a workaround so that it will operate with either v1.x or v2.x of Paho-MQTT.
 
 If your system already has the required components, the command `./DNT` is all that's needed to display local temperatures.  `./DNT` starts the program and  prompts for the name of the `rtl_433` host on your local area network that provides MQTT subscription service.  `./DNT -H <hostname>` starts the program without the prompt.
 
@@ -65,7 +64,7 @@ If you already have an `rtl_433` host running on your network and publishing eve
 Then perform these steps on the computers you intend to use to display temperatures from neighborhood thermometer remotes:
 
 1. If you haven't already done so, download this package: `git clone https://github.com/hdtodd/DNT` on a system that will run XWindows and has a touchscreen or has a keyboard/mouse/display attached.  The remaining work is on that system.
-1. Install the Python3 `mqtt` library used to receive the `mqtt` JSON packets from the monitoring system over your local network: `pip3 install paho-mqtt`.  
+1. Install the Python3 `mqtt` library used to receive the `mqtt` JSON packets from the monitoring system over your local network: `pip3 install paho-mqtt`.  New installs will install v2 of paho-mqtt, but `DNT` will function with older v1 versions of paho-mqtt as well.  
 1. Start up the MQTT verification program: `./mqTest`, and provide the name of the `rtl_433` monitoring host on your local area network. If your monitoring system is in operation, `mqTest` will simply type out on the terminal screen the information about the packets that the monitoring system is receiving via the RTL\_SDR dongle and publishing via `mqtt`.  If it isn't working, but testing with `mosquitto_sub` is working on your monitoring system, add command-line parameters  to `mqTest` to identify the correct host, topic, port and (if secured) username and password needed for the host computer MQTT subscription. `DNT` relies on the same connection system as `mqTest`, so once you've confirmed those parameters with `mqTest`, provide those parameters to `DNT`.  
 1. Finally, test `DNT`: 
 	* Run `./DNT` by issuing that command in a terminal window on an XWindows display.  If you want temperatures in Celsius, use the command `DNT -C`.  Over several minutes, the list on the screen will be populated, then regularly updated, with thermometer readings.  The frequency of updating varies by manufacturer and model, but readings are usually reported every 30-to-60 seconds, so individual lines in the display will be updated at different frequencies.
@@ -162,5 +161,12 @@ The developers of `rtl_433` continually update the list of devices that the prog
 ## Outstanding Issues
 On occasion, clicking the "Quit" button fails to shut down `DNT` on Mac OSX.  This appears to be a Python GIL issue caused by interaction between `tkinter` and `mqtt` loops.  Feedback and suggested solutions would be welcome.
 
+## Release History
+
+*  V1.0: First operational version
+*  V2.0: Make display table scrollable; add warning flags
+*  V2.1: Introduce use of environmental and  command-line parameters
+*  V2.2: Add workaround for paho_mqtt v1/v2 callback incompatibility 
+
 ## Author
-Written by David Todd, hdtodd@gmail.com, 2023.04.
+Written by David Todd, hdtodd@gmail.com, 2023.04; V2.2 2024.07.
