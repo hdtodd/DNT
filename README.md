@@ -158,9 +158,6 @@ The JSON log file grows quickly, so you will, over time, need to remove the JSON
 
 The developers of `rtl_433` continually update the list of devices that the program recognizes, so connect to the `rtl_433` download directory, `git pull`, re-build, and re-install `rtl_433` periodically to add recognition of new devices in your neighborhood.
 
-## Outstanding Issues
-On occasion, clicking the "Quit" button fails to shut down `DNT` on Mac OSX.  This appears to be a Python GIL issue caused by interaction between `tkinter` and `mqtt` loops.  Feedback and suggested solutions would be welcome.
-
 ## Release History
 
 *  V1.0: First operational version
