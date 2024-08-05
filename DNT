@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
-# DNT -- Display Temperatures from neighborhood remote thermometers
+#  DNT
+VERSION="2.3.0"
+
+#Display Temperatures from neighborhood remote thermometers
 # Modeled after
 #   https://learn.sparkfun.com/tutorials/python-gui-guide-introduction-to-tkinter/experiment-3-sensor-dashboard
 #
-# HDTodd, Williston, VT, February, 2023; v2 April, 2023
+# HDTodd, Williston, VT, v1 2023.02; v2 2023.04; v3 2024.08
 
 import argparse
 import sys
@@ -327,22 +330,13 @@ def toggle_fullscreen(event=None):
     global fullscreen
 
     fullscreen = not fullscreen
+    if fullscreen:
+        hfont.configure(size=max(48, int((win.winfo_height() / 18))))
+        dfont.configure(size=max(36, int((win.winfo_height() / 24))))
+    else:
+        hfont.configure(size=40)
+        dfont.configure(size=18)
     win.attributes('-fullscreen', fullscreen)
-    resize()
-    return
-
-# Automatically resize font size based on window size
-def resize(event=None):
-    global dfont
-    global lfont
-    global win
-
-    # Resize font based on frame height (minimum size of 12)
-    # Use negative number for "pixels" instead of "points"
-    hfont.configure(size=-max(36, int((win.winfo_height() / 18))))
-    dfont.configure(size=-max(24, int((win.winfo_height() / 24))))
-    lfont.configure(size=-max(30, int((win.winfo_height() / 24))))
-
     return
 
 #######################################################################################
@@ -359,7 +353,7 @@ def add_row(dRow):
     if dRow==0:
         (bg, fg, fbg, ffg) = ("cornflower blue", "white", "yellow", "black")
     else:
-        (bg, fg, fbg, ffg) = ("white", "black", "white", "black")
+        (bg, fg, fbg, ffg) = ("white", "black", "white", "red")
 
     lbl_loc  = tk.Label(row, width=30, textvariable=tbl[dRow][0], font=dfont, bg=bg, fg=fg)
     lbl_temp = tk.Label(row, width=7,  textvariable=tbl[dRow][1], font=dfont, bg=bg, fg=fg)
@@ -553,11 +547,9 @@ def reset_warn():
 ###############################################################################
 # CNTL-C and QUIT button handler
 def quit_prog(event=None):
-    mqtt.loop_stop()
-    print()
-    time.sleep(1)      # let events clear (we hope)
-    mqtt.disconnect()
     win.quit()
+    mqtt.loop_stop()
+    mqtt.disconnect()
     sys.exit(0)
 
 ###############################################################################
