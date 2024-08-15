@@ -1,4 +1,4 @@
-# DNT: Display Neighborhood Temperatures Version 2.3.0
+# DNT: Display Neighborhood Temperatures Version 3.0.0
 ### Display thermometer readings from around your neighborbood
 
 `DNT` is a Python program that uses the output from `rtl_433` to display temperature and humidity readings from remote thermometers around your neighborhood.  
@@ -9,7 +9,7 @@ The readings are obtained from the `rtl_433` program that monitors the Industria
 
 ## Use
 
-`DNT` requires Python3 and Paho-MQTT on the displaying computer and an `rtl_433` system running on your local area network (description in subsequent section).  Paho-MQTT v2 broke v1 callback invocations, but v2.2 of `DNT` incorporates a workaround so that it will operate with either v1.x or v2.x of Paho-MQTT.
+`DNT` requires Python3 and Paho-MQTT on the displaying computer and an `rtl_433` system running on your local area network (description in subsequent section).  Paho-MQTT v2 broke v1 callback invocations, but v2.2 of `DNT` and subsequent versions incorporate a workaround so that it will operate with either v1.x or v2.x of Paho-MQTT.
 
 If your system already has the required components, the command `./DNT` is all that's needed to display local temperatures.  `./DNT` starts the program and  prompts for the name of the `rtl_433` host on your local area network that provides MQTT subscription service.  `./DNT -H <hostname>` starts the program without the prompt.
 
@@ -165,6 +165,7 @@ The developers of `rtl_433` continually update the list of devices that the prog
 *  V2.10.0: Introduce use of environmental and  command-line parameters
 *  V2.2.0: Add workaround for paho_mqtt v1/v2 callback incompatibility 
 *  V2.3.0: Correct "quit" hang; fix toggle font resizing
+*  V3.0.0: Add support for HTTP connections to existing MQTT support
 
 ## Author
-Written by David Todd, hdtodd@gmail.com, v2.0 2023.02; v2.10.0 2023.04; V2.2.0 2024.07.
+Written by David Todd, hdtodd@gmail.com, v2.0 2023.02; v2.10.0 2023.04; V2.2.0 2024.07; v3.0.0 2024.08

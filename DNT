@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #  DNT
-VERSION="2.3.0"
+VERSION="3.0.0"
 
 #Display Temperatures from neighborhood remote thermometers
 # Modeled after
