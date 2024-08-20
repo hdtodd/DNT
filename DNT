@@ -29,7 +29,7 @@ except ImportError:
 
 AP_DESCRIPTION="""
 DNT:  Display the temperatures of neighborhood remote thermometer sensors
-      as observed and published as MQTT by rtl_433.
+      as observed and streamed as HTTP or published as MQTT by rtl_433.
 """
 
 AP_EPILOG="""
@@ -62,8 +62,10 @@ location = {
 # Parameters used to establish the mqtt connection to the rtl_433
 #   receiver mqtt publisher
 host      = None
+port      = None
 topic     = "rtl_433/+/events"
-port      = 1883
+Hport     = 8433
+Mport     = 1883
 username  = ""
 password  = ""
 client_id = f'python-mqtt-{random.randint(0, 100)}'
@@ -73,6 +75,8 @@ useF   = True
 tScale = "°F"
 
 # Variables and constants used globally
+HTTP       = 0
+MQTT       = 1
 win        = None
 frm_table  = None
 fullscreen = False
@@ -92,6 +96,9 @@ bl_flag    = "\U0000203C"  # '!!': want to use "\U0001FAAB" {low battery} but no
 st_flag    = "\U00002049"  # '?!'
 Warnings   = [" ", st_flag, bl_flag]
 Warn       = IntEnum('Warn', [ ('OK', 0), ('ALERT', 1), ('ALARM', 2)])
+
+global exit_event
+global source
 
 # Set 2-sec threshhold for rejecting duplicate records
 dup_thresh = 2.0
@@ -216,18 +223,13 @@ def make_parser():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         description=AP_DESCRIPTION, epilog=AP_EPILOG)
 
-    parser.add_argument("-H", "--host", dest="host", type=str,
-                        default=host,
-                        help="MQTT hostname to connect to (default: %(default)s)")
-    parser.add_argument("-T", "--topic", dest="topic", type=str,
-                        default=topic,
-                        help="rtl_433 MQTT event topic to subscribe to (default: %(default)s)")
-    parser.add_argument("-U", "--username", type=str, default=username,
-                        help="MQTT username, if needed; defaults to blank")
-    parser.add_argument("-P", "--password", type=str, default=password,
-                        help="MQTT password, if needed; defaults to blank")
-    parser.add_argument("-p", "--port", type=int, default=port,
-                        help="MQTT port (default: %(default)s)")
+    parser.add_argument("-S", "--source", dest="source_str", type=str,
+                        choices=["HTTP", "MQTT"], default="MQTT",
+                        help="Connect to source with HTTP or MQTT? (default: %(default)s)")
+    parser.add_argument("-H", "--host", dest="host", type=str, default=host,
+                        help="HTTP or MQTT hostname to connect to (default: %(default)s)")
+    parser.add_argument("-p", "--port", type=int,
+                        help="HTTP or MQTT port # (default: 8433 or 1883")
     parser.add_argument("-d", "--debug", dest="debug", action="store_true")
     parser.add_argument("-W", "--warn", dest="warn", action="store_true",
                         help="Insert warnings at pkts 20 & 40 to debug; requires -d")
@@ -238,26 +240,64 @@ def make_parser():
     specifyTemp.add_argument("-F", "--Fahrenheit", dest="degC", action="store_false",
                              default=True,
                              help="Display temperatures in Fahrenheit (default)")
+    parser.add_argument("-T", "--topic", dest="topic", type=str,
+                        default=topic,
+                        help="(If needed) rtl_433 MQTT event topic to subscribe to (default: %(default)s)")
+    parser.add_argument("-U", "--username", type=str, default=username,
+                        help="(If needed) MQTT username; defaults to blank")
+    parser.add_argument("-P", "--password", type=str, default=password,
+                        help="(If needed) MQTT password; defaults to blank")
     args = parser.parse_args()
     return args
 
 ###############################################################################
 # Set execution parameters from cmdline
 def set_params():
-    global host, topic, username, password, port, useF, tScale, debug, debugW
+    global source, host, topic, username, password, port, useF, tScale, debug, debugW
 
     args = make_parser()
 
-    #  We need host and topic, so if not already provided by
-    #    cmdline, env, or embedded source code, then ask for them
+    #  We need to know if we're connecting to the source via HTTP or MQTT
+    #  Should be set to MQTT by parser by default, but check
+    if not args.source_str:
+        if source is None:
+            while True:
+                args.source_str = input("Connect to source via HTTP or MQTT?: ")
+                if args.source_str=="HTTP" or args.source_str=="MQTT":
+                    break
+    source = HTTP if args.source_str=="HTTP" else MQTT
+
+    #  We need host name or IP, so if not already provided by
+    #    cmdline, env, or embedded source code, then ask for it
     if not args.host:
-        if "MQTT_HOST" in os.environ:
+        if source==MQTT and "MQTT_HOST" in os.environ:
             args.host = os.environ["MQTT_HOST"]
         else:
-            if host is None:
-                args.host = input("MQTT host name or IP: ")
+            if source==HTTP and "HTTP_HOST" in os.environ:
+                args.host = os.environ["HTTP_HOST"]
+            else:
+                if host is None:
+                    args.host = input("HTTP/MQTT host name or IP: ")    
 
-    if not args.topic:
+    #  Set connection parameters from env if possible
+    #  If source is not specified, default to MQTT for historic compatibility
+    if not args.port:
+        if source==MQTT:
+            if "MQTT_PORT" in os.environ:
+                args.port = os.environ["MQTT_PORT"]
+            else:
+                args.port = Mport
+        else:
+            if source==HTTP:
+                if "HTTP_PORT" in os.environ:
+                    args.port = os.environ["HTTP_PORT"]
+                else:
+                    args.port = Hport
+            else:
+                args.port=Mport
+                source = MQTT
+
+    if source==MQTT and not args.topic:
         if "MQTT_TOPIC" in os.environ:
             args.topic = os.environ["MQTT_TOPIC"]
         else:
@@ -276,66 +316,77 @@ def set_params():
     else:
         args.password = ""
 
-    if not args.port and 'MQTT_PORT' in os.environ:
-        args.port = os.environ['MQTT_PORT']
-
     useF     = False if args.degC is not None and args.degC else True
     tScale   = "°F" if useF else "°C"
     host     = args.host
+    port     = args.port
     topic    = args.topic
     username = args.username
     password = args.password
-    port     = args.port
     debug    = args.debug
     debugW   = args.debug and args.warn
     if debug:
         print("Debug is ON")
         print("Parameter settings in execution are ...")
-        print("\tMQTT host:    ", host)
+        print("\tHTTP/MQTT host:    ", host)
+        print("\tHTTP/MQTT port:    ", port)
         print("\tMQTT topic:   ", topic)
         print("\tMQTT username:", username)
         print("\tMQTT password:", password)
-        print("\tMQTT port:    ", port)
         print("\tUseF:         ", useF)
         print("\tDebug warnings", debugW)
     return
 
-###############################################################################
-# Convert time from various formats to epoch time
+# End set execution parameters from defaults and the cmdline
+# End command-line and parameter-setting function
+
+##############################################################################
+# Convert time string (ts) from ISO format to epoch time                                 
+# Or, if ts is in epoch time, convert to timestamp format.                               
+# Return both formats for use in processing and displaying                               
 def CnvTime(ts):
-    if ts.find("-") > 0:   #Looks like an ISO formatted datetime string
+    if ts.find("-") > 0:
         try:
             eTime = datetime.datetime.fromisoformat(ts).timestamp()
+            timestamp = ts
         except ValueError as e:
             err={}
             print("datetime error in input line converting time string: ", ts)
             print("datetime  msg:", err.get("error", str(e)))
             sys.exit(1)
-    else:                  #Not ISO.  Assume it's Epoch time
+    else:
         try:
             eTime = float(ts)
-        except ValueError as e:   #Nope.  Give up and say why.
+            timestamp = datetime.datetime.fromtimestamp(eTime)
+        except ValueError as e:
             err = {}
             print("Datetime conversion failed on line with datetime string", ts)
             print("float() error msg:", err.get("error", str(e)))
             sys.exit(1)
-    return eTime
+
+    return(timestamp, eTime)
+# End CnvTime()
 
 ###############################################################################
 # Functions for displaying
 
-# Toggle fullscreen
+
+# Toggle fullscreen                                                                      
 def toggle_fullscreen(event=None):
     global win
     global fullscreen
 
     fullscreen = not fullscreen
     if fullscreen:
-        hfont.configure(size=max(48, int((win.winfo_height() / 18))))
-        dfont.configure(size=max(36, int((win.winfo_height() / 24))))
+        hfont.configure(size=max(36, int((win.winfo_height() / 18))))
+        bfont.configure(size=max(24, int((win.winfo_height() / 24))))
+        dfont.configure(size=max(24, int((win.winfo_height() / 24))))
+        lfont.configure(size=max(30, int((win.winfo_height() / 24))))
     else:
         hfont.configure(size=40)
+        bfont.configure(size=24)
         dfont.configure(size=18)
+        lfont.configure(size=30, weight="bold")
     win.attributes('-fullscreen', fullscreen)
     return
 
@@ -388,6 +439,7 @@ def connect_mqtt() -> mqtt_client:
         mqtt = mqtt_client.Client(mqtt_client.CallbackAPIVersion.VERSION1, client_id, clean_session=False)
     mqtt.username_pw_set(username, password)
     mqtt.on_connect = on_connect
+    print("connecting to ", host, port)
     mqtt.connect(host, port)
     subscribe(mqtt)
     return mqtt
@@ -486,7 +538,7 @@ def subscribe(mqtt: mqtt_client):
                 return   # if no temp reading in record, ignore it
 
         # OK, we have a temp reading. Get the variables we need
-        eTime   = CnvTime(y["time"])
+        (isoTime,eTime)  = CnvTime(y["time"])
         loc     = dev if dev not in location else location[dev]
         hum     = 0 if "humidity" not in y.keys() else int(y["humidity"])
         battery = None if "battery_ok" not in y else y["battery_ok"]
@@ -544,13 +596,25 @@ def reset_warn():
     mqtt.loop_start()
     return
 
-###############################################################################
-# CNTL-C and QUIT button handler
-def quit_prog(event=None):
-    win.quit()
-    mqtt.loop_stop()
-    mqtt.disconnect()
-    sys.exit(0)
+##############################################################################
+# CNTL-C and QUIT button handler                                                         
+def quit_prog():
+    global exit_event
+    global msg_q
+    global mqtt
+    global win
+    global source
+    if debug:
+        print("Quitting from quit_prog")
+    exit_event.set()
+    msg_q.put(None)
+    if source==HTTP:
+        print(CSIGRN, "\n\nWait for data collection to complete ...", CSIBLK)
+    win.destroy()
+    if source==MQTT:
+        mqtt.loop_stop()
+        mqtt.disconnect()
+    return
 
 ###############################################################################
 # Create the display panels and table section
