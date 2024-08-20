@@ -9,17 +9,19 @@ The readings are obtained from the `rtl_433` program that monitors the Industria
 
 ## Use
 
-`DNT` requires Python3 and Paho-MQTT on the displaying computer and an `rtl_433` system running on your local area network (description in subsequent section).  Paho-MQTT v2 broke v1 callback invocations, but v2.2 of `DNT` and subsequent versions incorporate a workaround so that it will operate with either v1.x or v2.x of Paho-MQTT.
+`DNT` requires access to an `rtl_433` service (which may be on the same computer) as its source of weather remote-sensor data.  `DNT` can connect to that service via either HTTP or MQTT network protocols.  `DNT` requires Python3 on the displaying computer.
 
-If your system already has the required components, the command `./DNT` is all that's needed to display local temperatures.  `./DNT` starts the program and  prompts for the name of the `rtl_433` host on your local area network that provides MQTT subscription service.  `./DNT -H <hostname>` starts the program without the prompt.
+If you choose to use MQTT as the communication protocol, `DNT` also requires Paho-MQTT to be installed on that computer.  Paho-MQTT v2 broke v1 callback invocations, but v2.2 of `DNT` and subsequent versions incorporate a workaround so that it will operate with either v1.x or v2.x of Paho-MQTT.
 
-The program opens a scrollable, resizable display window with columns for the thermometer identity, temperature, humidity, and warning flags; appends new remote thermometer devices and associated data as they are observed by the `rtl_433` host system; and updates subsequent readings as they are reported.
+If your system already has the required components, the command `./DNT` is all that's needed to display local temperatures.  `./DNT` starts the program and  prompts for the name of the `rtl_433` host on your local area network that provides MQTT subscription service.  `./DNT -H <hostname>` starts the program without the prompt.  `./DNT -S HTTP -H <hostname>` starts the program and connects using the HTTP program, if the `rtl_433` service is configured to provide HTTP streaming.
+
+The `DNT` program opens a scrollable, resizable display window with columns for the thermometer identity, temperature, humidity, and warning flags; appends new remote thermometer devices and associated data as they are observed by the `rtl_433` host system; and updates subsequent readings as they are reported.
 
 `./DNT -h` provides more information about command-line options.  Additional configuration options are described in a later section.
 
 ## The Display Window
 
-In its upper panel, the display window indicates the `rtl_433` host that it is monitoring.  It also provides three buttons:
+In its upper panel, the display window indicates the `rtl_433` host that it is monitoring and the communication protocol.  It also provides three buttons:
 
 1.  "WRst" is the *Warning Reset* button: it clears the warning flags for all devices (the last column of the data display -- see below).
 1. "Togl" toggles the display window between full screen and reduced size.
@@ -47,11 +49,11 @@ The "WRst" button clears both the battery-low and status-change flags for *all* 
 
 This system uses several components, all of which could be hosted on one computer but can also be distributed over several systems:
 
-* The `DNT` Python program itself, which displays the current readings from a set of neighboring remote probes.  `DNT` receives the readings over your local-area network via MQTT from an `rtl_433` monitoring system.  `DNT` can actually run on the monitoring computer itself or on any number of other computers connected to the same local-area network as the monitoring computer.
+* The `DNT` Python3 program itself, which displays the current readings from a set of remote sensors in the neighborhood of your `rtl_433` service.  `DNT` receives the readings over your network via HTTP or MQTT from that `rtl_433` monitoring system.  `DNT` can actually run on the monitoring computer itself or on any number of other computers connected to the same local-area network as the monitoring computer.
 * A host monitoring system that:
 	* Has an RTL_SDR dongle attached, to receive ISM broadcasts.  In the US, that band is at 433.92MHz, but the devices and software components function across the range of ISM bands used around the world. 
-	* Runs the `rtl_433` program to collect and analyze the ISM packets and publish the analyzed packets as JSON messages via MQTT over your local network.
-	* Runs an MQTT broker to publish the ISM events seen by `rtl_433`.
+	* Runs the `rtl_433` program to collect and analyze the ISM packets and publish the analyzed packets as JSON messages via HTTP or MQTT over your local network.
+	* Either is configured to stream data packets via HTTP or uns an MQTT broker to publish the ISM events seen by `rtl_433` via MQTT.
 
 The components are standard hardware and software components, easily obtained from online sources and well maintained. The only component included here is `DNT`: sources for the other components are provided in sections below.
 
@@ -59,18 +61,19 @@ The components are standard hardware and software components, easily obtained fr
 
 `DNT` was developed on MacOSX and Raspberry Pi OS and should function on any system that supports the requisite Python3, tkinter, and Paho-MQTT components. The `DNT` program was originally designed to run on a Raspberry Pi 7" touchscreen display but functions equally well on a large display.
 
-If you already have an `rtl_433` host running on your network and publishing events via MQTT, `DNT` is ready to go.  If not, follow the instructions in the section below to set up an `rtl_433` monitoring host.
+If you already have an `rtl_433` host running on your network and publishing events via HTTP or MQTT, `DNT` is ready to go.  If not, follow the instructions in the section below to set up an `rtl_433` monitoring host.
 
 Then perform these steps on the computers you intend to use to display temperatures from neighborhood thermometer remotes:
 
 1. If you haven't already done so, download this package: `git clone https://github.com/hdtodd/DNT` on a system that will run XWindows and has a touchscreen or has a keyboard/mouse/display attached.  The remaining work is on that system.
-1. Install the Python3 `mqtt` library used to receive the `mqtt` JSON packets from the monitoring system over your local network: `pip3 install paho-mqtt`.  New installs will install v2 of paho-mqtt, but `DNT` will function with older v1 versions of paho-mqtt as well.  
-1. Start up the MQTT verification program: `./mqTest`, and provide the name of the `rtl_433` monitoring host on your local area network. If your monitoring system is in operation, `mqTest` will simply type out on the terminal screen the information about the packets that the monitoring system is receiving via the RTL\_SDR dongle and publishing via `mqtt`.  If it isn't working, but testing with `mosquitto_sub` is working on your monitoring system, add command-line parameters  to `mqTest` to identify the correct host, topic, port and (if secured) username and password needed for the host computer MQTT subscription. `DNT` relies on the same connection system as `mqTest`, so once you've confirmed those parameters with `mqTest`, provide those parameters to `DNT`.  
+1. Install the Python3 `mqtt` library used to receive the `mqtt` JSON packets from the monitoring system over your local network: `pip3 install paho-mqtt`.  New installs will install v2 of paho-mqtt, but `DNT` will function with older v1 versions of paho-mqtt as well.
+1. If the `rtl_433` service system is streaming data via HTTP, run `./http_rtl` on the monitoring system to confirm that it is able to receive the streamed data.
+1. If you're using MQTT protocol, start up the MQTT verification program: `./mqTest`, and provide the name of the `rtl_433` monitoring host. If your monitoring system is in operation, `mqTest` will simply type out on the terminal screen the information about the packets that the monitoring system is receiving via the RTL\_SDR dongle and publishing via `mqtt`.  If it isn't working, but testing with `mosquitto_sub` is working on your monitoring system, add command-line parameters  to `mqTest` to identify the correct host, topic, port and (if secured) username and password needed for the host computer MQTT subscription. `DNT` relies on the same connection system as `mqTest`, so once you've confirmed those parameters with `mqTest`, provide those parameters to `DNT`.  
 1. Finally, test `DNT`: 
-	* Run `./DNT` by issuing that command in a terminal window on an XWindows display.  If you want temperatures in Celsius, use the command `DNT -C`.  Over several minutes, the list on the screen will be populated, then regularly updated, with thermometer readings.  The frequency of updating varies by manufacturer and model, but readings are usually reported every 30-to-60 seconds, so individual lines in the display will be updated at different frequencies.
+	* Run `./DNT` or `./DNT -S HTTP` by issuing that command in a terminal window on an XWindows display.  If you want temperatures in Celsius, add `-C` to that command.  Over several minutes, the list on the screen will be populated, then regularly updated, with thermometer readings.  The frequency of updating varies by manufacturer and model, but readings are usually reported every 30-to-60 seconds, so individual lines in the display will be updated at different frequencies.
 	* `rtl_433` reports the model, channel, and id number of the devices it sees, but those identifiers might not be familiar to you.  `DNT` has a small dictionary of thermometers you might want to watch and label with familiar names such as "porch" or "Schmidts".  Those identifier-label associations are listed as a dictionary near the beginning of the `DNT` code.  The thermometers are identified by keyword constructed from a model name, channel used, and a model id, as a single concatenated string.  Near the beginning of the `DNT` code is a dictionary of "model/channel/id" keywords and an associated location label. If you know the "model/channel/id" for your own thermometer remote, or that of neighbors, edit the "model/channel/id" keyword and corresponding location label to identify those. If present, the "location" value will be displayed in the data table and listed at the top of the table. 
 1. If you want to be able to start `DNT` by touching or clicking an icon on your Linux desktop, perform these additional steps from the `DNT` installation directory:
-	* Edit the file `DNT.desktop` to append `-H <hostname>` and any other needed MQTT parameters to the invocation of `/usr/local/bin/DNT`. 
+	* Edit the file `DNT.desktop` to append `-H <hostname>` and any other needed HTTP or MQTT parameters to the invocation of `/usr/local/bin/DNT`. 
 	* If you want readings in Celsius, edit the file `DNT.desktop` to add ` -C` at the end of the DNT command line.
 	* `sudo mkdir -p /usr/local/bin`
 	* `sudo mkdir -p /usr/local/share/pixmaps`
@@ -79,25 +82,25 @@ Then perform these steps on the computers you intend to use to display temperatu
 	* `sudo cp DNT.png /usr/local/share/pixmaps/`
 	* `cp DNT.desktop ~/Desktop/`
 
-### Providing MQTT parameters
+### Providing parameters to `DNT`
 
-DNT requires information about the `rtl_433` MQTT publishing host:
+DNT requires information about the `rtl_433` service host:
 
-*  MQTT host name
-*  MQTT topic
+*  HTTP or MQTT host name
+*  host HTTP or MQTT port [if not the HTTP 8433 or MQTT 1883 standard port]
+*  MQTT topic (if using MQTT)
 *  MQTT login username [if MQTT is secured] 
 *  MQTT login password [if MQTT is secured] 
-*  host MQTT port [if the MQTT port is not the 1883 standard]
 
-All but the host name are set to default values and may not need to be changed.  But if your `rtl_433` host MQTT broker parameters are set differently, these parameters may be provided in four different ways.  In decreasing order of precedence:
+All but the host name are set to default values and may not need to be changed.  But if you're using MQTT and your `rtl_433` host MQTT broker parameters are set differently, these parameters may be provided in four different ways.  In decreasing order of precedence:
 
 1.  Command line switches [-H, -T, -U,-P, -p] override all other sources to specify HOST, TOPIC, USER, PASSWORD, or PORT, respectively.
 2.  These environment variables override internal variable assignments and avoid prompting:
-	*  MQTT\_HOST
+	*  MQTT\_HOST or HTTP\_HOST
+	*  MQTT\_PORT (default 1883) or HTTP\_PORT (default 8433)
 	*  MQTT\_TOPIC
 	*  MQTT\_USER (defaults to \"\" if not specified and not provided on command line)
 	*  MQTT\_PASSWORD (defaults to \"\" if not specified and not provided on command line)
-	*  MQTT\_PORT (defaults to 1883 if not specified and not provided on command line)
 3.  The required parameter values can be assigned within the program source code.   Default values are  set near the beginning of the DNT source code.
 4. If not specified on command line, provided via environment, or set as internal variable assignments in the Python source code, the program prompts for HOST and assigns defaults to TOPIC, USER, PASSWORD, and PORT.
 
@@ -105,13 +108,13 @@ All but the host name are set to default values and may not need to be changed. 
 
 You may have trouble identifying the location of the various thermometer remotes from which your RTL-SDR receives signals.  But you can likely identify those that are closest to you by observing the average signal-to-noise ratio over time and selecting those with the highest SNR for display in your table.  See the section below on how to do that.
 
-**Over time, the "id" number of your dictionary entries will change!**  When the batteries on the remote are depleted, the owner must reinstall new  batteries and re-synch the remote with the indoor thermometer: for most devices, the "id" changes.  Use `mosquitto_sub` or `mqTest` or `DNT -d` to monitor the devices transmitting in your neighborhood and update the "model/channel/id" value in the association dictionary accordingly.  Or catalog devices using the method below and edit entries from the list `rtl_433_stats` generates.
+**Over time, the "id" number of your dictionary entries will change!**  When the batteries on the remote are depleted, the owner must reinstall new  batteries and re-synch the remote with the indoor thermometer: for most devices, the "id" changes.  Use `mosquitto_sub` or `mqTest` or `DNT -d` or `http_rtl` to monitor the devices transmitting in your neighborhood and update the "model/channel/id" value in the association dictionary accordingly.  Or catalog devices using the method below and edit entries from the list `rtl_433_stats` generates.
 
 ### Debugging
 
 Two command-line options may be useful for debugging or verifying `DNT` operation:
 
-* `-d` causes a variety of processing messages to be printed on the controlling terminal as the program processes MQTT packets.  This might be most useful in first running `DNT` as it then prints extended information about received packets, including the signal-to-noise (SNR) ratio.  SNR may be helpful in identifying relative distance of various remote sensors seen by the RTL-SDR dongle, as higher values indicate closer proximity.  (Generally, an SNR of 15-20 is a close device from which you will routinely see transmissions; an SNR of 10 or less indicates a remote device from which transmissions are likely to be unreliable.)
+* `-d` causes a variety of processing messages to be printed on the controlling terminal as the program processes data packets.  This might be most useful in first running `DNT` as it then prints extended information about received packets, including the signal-to-noise (SNR) ratio.  SNR may be helpful in identifying relative distance of various remote sensors seen by the RTL-SDR dongle, as higher values indicate closer proximity.  (Generally, an SNR of 15-20 is a close device from which you will routinely see transmissions; an SNR of 10 or less indicates a remote device from which transmissions are likely to be unreliable.)
 * `-W` only activates if `-d` is also invoked.  `-W` causes `DNT` to artificially inject *battery-low* and *status-change* conditions in packets to verify that the warning flags activate and that the "WRst" button clears them.
 
 ### Cataloging Nearby Devices with `rtl_433_stats`
@@ -137,7 +140,7 @@ Perform these steps on the computer you intend to use to monitor the ISM-band ra
 
 1. If you don't already have one, purchase an RTL-SDR receiver.  Use your favorite search engine to search for "rtl sdr receiver".  They cost about $30US.  But be sure to get one with an antenna appropriate for your region's ISM frequency band.  Then you simply plug it in to a USB port on your monitoring computer.
 1. If you're not sure of the frequency of ISM bands in use in your location, use a tool such as `CubicSDR` (https://cubicsdr.com/) to observe the various ISM bands and discover which ones have activity in your region.  Set the frequency in `rtl_433` (below) accordingly.
-1. Install mosquitto: `sudo apt-get install mosquitto mosquitto-client`.  The broker will be started by `systemd` and will be restarted whenever the system is rebooted.
+1. If you plan to use the MQTT broker service, install mosquitto: `sudo apt-get install mosquitto mosquitto-client`.  The broker will be started by `systemd` and will be restarted whenever the system is rebooted.
 1. Connect to a download directory on your monitoring computer and use `git` to install `rtl_433`: `git clone https://github.com/merbanan/rtl_433`.
 1. Connect to the installed rtl\_433 directory and follow the instructions in `./docs/BUILDING.md`to build and install the rtl\_433 program. **Be sure to install the prerequisite programs needed by rtl_433 before starting `cmake`.**  
 1. **INITIAL TEST** Following the build and install, you can simply invoke `sudo /usr/local/bin/rtl_433` to verify that it starts up, finds the RTL_SDR dongle, and identifies ISM packets.  You may need to adjust the frequency via command line, e.g.,  `-f 315M`, if you're not in the US.
@@ -146,7 +149,8 @@ Perform these steps on the computer you intend to use to monitor the ISM-band ra
    * Edit `/usr/local/etc/rtl_433/rtl_433.conf`:
      * If your regional ISM band is not 433.92MHz, set the correct frequency in the "frequency" entry.
      * Under `## Analyze/Debug options`, comment out stats reporting: `#report_meta stats`
-     * Under `## Data output options`/`# as command line option:` add `output mqtt` and `output json:/var/log/rtl_433/rtl_433.json`.  The former has the program publish received packets via MQTT and the latter logs received packets to a log file in case you want to do subsequent analysis of devices in your neighborhood.  More options for MQTT publishing service are available, but this will get you started.
+     * If you plan to use MQTT protocol, under `## Data output options`/`# as command line option:` add `output mqtt` to have `rtl_433` publish via MQTT.
+     * Under ## Data output options`/`# add `output json:/var/log/rtl_433/rtl_433.json` to have `rtl_433` log received packets to a log file in case you want to do subsequent analysis of devices in your neighborhood.  More options for MQTT publishing service are available, but this will get you started.
      *Create the directory for that log file: `sudo mkdir /var/log/rtl_433`
 1. **PRODUCTION TEST** Now `sudo /usr/local/bin/rtl_433` from the command line of one terminal screen on the monitoring computer.  From the command line of another terminal screen on that computer, or from another computer with mosquitto client installed, type `mosquitto_sub -h <monitorhost> -t "rtl_433/<monitorhost>/events"`, where you substitute your monitoring computer's hostname for "\<monitorhost>".  If you have ISM-band traffic in your neighborhood, and if you've tuned `rtl_433` to the correct frequency, you should be seeing the JSON-format records of packets received by the RTL\_SDR dongle.  If you don't, first verify that you can publish to `mosquitto` on that monitoring computer and receive via a client (use the native `mosquitto_pub` and `mosquitto_sub` commands).  If `mosquitto` is functioning correctly, check that the rtl\_433 configuration file specifies mqtt output correctly.
 1. Finally, install the rtl_433 monitor as a service:
