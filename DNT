@@ -606,15 +606,11 @@ def quit_prog():
     global source
     if debug:
         print("Quitting from quit_prog")
-    exit_event.set()
-    msg_q.put(None)
-    if source==HTTP:
-        print(CSIGRN, "\n\nWait for data collection to complete ...", CSIBLK)
     win.destroy()
     if source==MQTT:
         mqtt.loop_stop()
         mqtt.disconnect()
-    return
+    sys.exit(0)
 
 ###############################################################################
 # Create the display panels and table section
