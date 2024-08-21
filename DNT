@@ -11,13 +11,16 @@ VERSION="3.0.0"
 import argparse
 import sys
 import os
+import codecs
 import signal
 from paho.mqtt import client as mqtt_client
 import random
 import json
 import time
 import datetime
+import requests
 from enum import IntEnum
+from queue import Queue
 try:
     import tkinter as tk
     from tkinter import ttk
@@ -97,7 +100,7 @@ st_flag    = "\U00002049"  # '?!'
 Warnings   = [" ", st_flag, bl_flag]
 Warn       = IntEnum('Warn', [ ('OK', 0), ('ALERT', 1), ('ALARM', 2)])
 
-global exit_event
+global msg
 global source
 
 # Set 2-sec threshhold for rejecting duplicate records
@@ -671,6 +674,11 @@ def create_display():
 
 if __name__ == "__main__":
 
+    global msg
+    global source
+    global debug
+    
+    msg_q = Queue(0)
     t = datetime.datetime.now()
     signal.signal(signal.SIGINT, quit_prog)
 
@@ -684,7 +692,17 @@ if __name__ == "__main__":
 
     # Create the display
     create_display()
+
+    # Connect to the mqtt host and subscribe to the feed.                                
+    # This activates the on_message procedure in which                                   
+    #   MQTT events cause the displayed values to be updated                             
+    if source==MQTT:
+        mqtt = connect_mqtt()
     
+    if debug:
+        print("Entering the main run loops")
+        print("Start packet processing")
+
     # connect to the mqtt host and subscribe to the feed.
     #   MQTT events cause the displayed values to be updated
     mqtt = connect_mqtt()
