@@ -423,7 +423,140 @@ def add_row(dRow):
     return
 
 ###############################################################################
-# MQTT functions and display updating
+
+# process_msg() does the real work of understanding and then presenting
+#   the data in the received message (from HTTP or MQTT)
+# If it's a thermometer reading.
+#   Ignore if it's a duplicate, update display if it isn't
+
+def process_msg(msg):
+    global pktcnt
+    global devices, tbl
+
+    def write_display_row_for_device(dev):
+        dRow = devices[dev].dRow
+        try:
+            tbl[dRow][0].set(devices[dev].loc)
+            tbl[dRow][1].set(round(devices[dev].temp,1))
+            tbl[dRow][2].set(devices[dev].hum)
+            tbl[dRow][3].set(devices[dev].warn)
+        except Exception as e:
+            print("Exception when trying to set display values for row", dRow,
+                  "location", loc)
+            print("Exception:", str(e))
+        return
+
+    # Find which display-table row a device in the location dictionary
+    #   is supposed to be shown at
+    def location_index(dev):
+        if dev not in location:
+            return None
+        x = 1  # start at 1 because header is row 0 in display table
+        for el in location:
+            if el == dev:
+                break
+            else:
+                x += 1
+        return x
+
+    def place_row(dev):
+    # If device "dev" is in the location dictionary, swap the rows in the
+    #   display table so this new "known" device is in its location
+    #   at the top of the display table
+        if dev in location:
+            # dev is in the location dictionary: find its position
+            x = location_index(dev)
+            if debug:
+                print("Found", dev, "at location dictionary index", x, 
+                      "Swapping table rows ", devices[dev].dRow, "and", x)
+            # Find which device currently uses that display row and swap them
+            for d in devices:
+                if devices[d].dRow == x:
+                    # found device at that row on display
+                    # now swap display rows and show the prior device in the new display row
+                    devices[d].dRow, devices[dev].dRow = devices[dev].dRow, devices[d].dRow
+                    dRow = x
+                    # And display the new device at display row of old one
+                    write_display_row_for_device(d)
+                    break
+        return
+
+    # parse the json payload
+    y = json.loads(msg.payload.decode())
+
+    # Ignore tire pressure monitoring system temp reports
+    if "type" in y and y["type"]=="TPMS":
+        return
+
+    # If not a device record, just return
+    if "model" not in y:
+        return
+
+    #  Create the device identifier as "model/channel/id"
+    dev = y["model"] + "/"
+    if "channel" in y:
+        dev += str(y["channel"])
+    dev += "/"
+    if "id" in y:
+        dev += str(y["id"])
+
+    # if this is a themometer reading, process it; otherwise just return
+    if "temperature_C" in y.keys():
+        ltemp = y["temperature_C"]
+        if useF:
+            ltemp = ltemp*9.0/5.0+32.0
+    else:
+        if "temperature_F" in y.keys():
+            ltemp = y["temperature_F"]
+            if not useF:
+                ltemp = (ltemp-32.0)*5.0/9.0
+        else:
+            return   # if no temp reading in record, ignore it
+
+    # OK, we have a temp reading. Get the variables we need
+    (isoTime,eTime)  = CnvTime(y["time"])
+    loc     = dev if dev not in location else location[dev]
+    hum     = 0 if "humidity" not in y.keys() else int(y["humidity"])
+    battery = None if "battery_ok" not in y else y["battery_ok"]
+    status  = None if "status"     not in y else y["status"]
+
+    # if debuging warnings (-d -W), inject warning conditions at pkts 10, 20
+    if debugW:
+        if pktcnt==10:
+            status = 9
+            print(CSIMGN, "Inserting status-code change for display debugging", CSIBLK)
+        if pktcnt==20:
+            battery = 0
+            print(CSIRED, "Inserting battery-low condition for display debugging", CSIBLK)
+
+    # Got all the values: update if not a repeated packet, or add if new
+    if dev in devices:
+        # Not a duplicate: update the values in the dictionary
+        #  and retrieve display-table row number
+        dup = devices[dev].update(eTime, ltemp, hum, battery, status)
+        dRow = devices[dev].dRow
+    else:
+        # Append a new device to the ends of the "device" and display "tbl" lists
+        dRow = len(tbl)
+        devices[dev] = Data(dRow, eTime, loc, ltemp, hum, battery, status)
+        dup = False
+        if debug:
+            print("Appending new device", dev, " to end of tbl at row", dRow)
+        add_row(dRow)
+        place_row(dev)
+    if not dup:
+        pktcnt += 1
+        if debug:
+             print("Update display row{:>3d}: {:<30} {:<20} {:<30} {:>6.1f}{:2} {:>3}% snr={:>3.0f}".format(
+                 devices[dev].dRow, devices[dev].loc, y["time"], dev, round(ltemp,1), tScale, hum,
+                 0.0 if "snr" not in y else y['snr']) )
+        write_display_row_for_device(dev)
+        return  #From process_msg()
+# End process_msg()
+
+############################################################################### 
+# MQTT functions and message reception
+
 # Connect to  MQTT host
 def connect_mqtt() -> mqtt_client:
     global debug
@@ -436,6 +569,8 @@ def connect_mqtt() -> mqtt_client:
             print("  with userdata ", userdata)
             print("Return code %d\n", rc)
             sys.exit(1)
+        return #from on_connect()
+    
 # Work around paho-mqtt v1, v2+ Client instantiation parameter diffs
     try:
         mqtt = mqtt_client.Client(client_id, clean_session=False)
@@ -443,161 +578,74 @@ def connect_mqtt() -> mqtt_client:
         mqtt = mqtt_client.Client(mqtt_client.CallbackAPIVersion.VERSION1, client_id, clean_session=False)
     mqtt.username_pw_set(username, password)
     mqtt.on_connect = on_connect
-    print("connecting to ", host, port)
+    if debug:
+        print("connecting to ", host, port)
     mqtt.connect(host, port)
-    subscribe(mqtt)
+    mqtt_subscribe(mqtt)
     return mqtt
 
 ###############################################################################
 # Subscribe to rtl_433 publication & process records we receive
-def subscribe(mqtt: mqtt_client):
+def mqtt_subscribe(mqtt: mqtt_client):
 
-    # on_message does the real work
-    # Invoked when an MQTT message arrives
-    # If it's a thermometer reading,
-    #   ignore if it's a duplicate, update display if it isn't
+    # When we get an MQTT message, just pass it on to the
+    #   message processor to handle, as it does for HTTP as well
     def on_message(mqtt, userdata, msg):
-        global pktcnt
-        global devices, tbl
-
-        def write_display_row_for_device(dev):
-            dRow = devices[dev].dRow
-            try:
-                tbl[dRow][0].set(devices[dev].loc)
-                tbl[dRow][1].set(round(devices[dev].temp,1))
-                tbl[dRow][2].set(devices[dev].hum)
-                tbl[dRow][3].set(devices[dev].warn)
-            except Exception as e:
-                print("Exception when trying to set display values for row", dRow,
-                      "location", loc)
-                print("Exception:", str(e))
-            return
-
-        # Find which display-table row a device in the location dictionary
-        #   is supposed to be shown at
-        def location_index(dev):
-            if dev not in location:
-                return None
-            x = 1  # start at 1 because header is row 0 in display table
-            for el in location:
-                if el == dev:
-                    break
-                else:
-                    x += 1
-            return x
-
-        def place_row(dev):
-        # If device "dev" is in the location dictionary, swap the rows in the
-        #   display table so this new "known" device is in its location
-        #   at the top of the display table
-            if dev in location:
-                # dev is in the location dictionary: find its position
-                x = location_index(dev)
-                if debug:
-                    print("Found", dev, "at location dictionary index", x, 
-                          "Swapping table rows ", devices[dev].dRow, "and", x)
-                # Find which device currently uses that display row and swap them
-                for d in devices:
-                    if devices[d].dRow == x:
-                        # found device at that row on display
-                        # now swap display rows and show the prior device in the new display row
-                        devices[d].dRow, devices[dev].dRow = devices[dev].dRow, devices[d].dRow
-                        dRow = x
-                        # And display the new device at display row of old one
-                        write_display_row_for_device(d)
-                        break
-            return
-
-        
-        # parse the json payload
-        y = json.loads(msg.payload.decode())
-
-        # Ignore tire pressure monitoring system temp reports
-        if "type" in y and y["type"]=="TPMS":
-            return
-        
-        # If not a device record, just return
-        if "model" not in y:
-            return
-
-        #  Create the device identifier as "model/channel/id"
-        dev = y["model"] + "/"
-        if "channel" in y:
-            dev += str(y["channel"])
-        dev += "/"
-        if "id" in y:
-            dev += str(y["id"])
-
-        # if this is a themometer reading, process it; otherwise just return
-        if "temperature_C" in y.keys():
-            ltemp = y["temperature_C"]
-            if useF:
-                ltemp = ltemp*9.0/5.0+32.0
-        else:
-            if "temperature_F" in y.keys():
-                ltemp = y["temperature_F"]
-                if not useF:
-                    ltemp = (ltemp-32.0)*5.0/9.0
-            else:
-                return   # if no temp reading in record, ignore it
-
-        # OK, we have a temp reading. Get the variables we need
-        (isoTime,eTime)  = CnvTime(y["time"])
-        loc     = dev if dev not in location else location[dev]
-        hum     = 0 if "humidity" not in y.keys() else int(y["humidity"])
-        battery = None if "battery_ok" not in y else y["battery_ok"]
-        status  = None if "status"     not in y else y["status"]
-
-        # if debuging warnings (-d -W), inject warning conditions at pkts 10, 20
-        if debugW:
-            if pktcnt==10:
-                status = 9
-                print(CSIMGN, "Inserting status-code change for display debugging", CSIBLK)
-            if pktcnt==20:
-                battery = 0
-                print(CSIRED, "Inserting battery-low condition for display debugging", CSIBLK)
-        
-        # Got all the values: update if not a repeated packet, or add if new
-        if dev in devices:
-            # Not a duplicate: update the values in the dictionary
-            #  and retrieve display-table row number
-            dup = devices[dev].update(eTime, ltemp, hum, battery, status)
-            dRow = devices[dev].dRow
-        else:
-            # Append a new device to the ends of the "device" and display "tbl" lists
-            dRow = len(tbl)
-            devices[dev] = Data(dRow, eTime, loc, ltemp, hum, battery, status)
-            dup = False
-            if debug:
-                print("Appending new device", dev, " to end of tbl at row", dRow)
-            add_row(dRow)
-            place_row(dev)
-        if not dup:
-            pktcnt += 1
-            if debug:
-                 print("Update display row{:>3d}: {:<30} {:<20} {:<30} {:>6.1f}{:2} {:>3}% snr={:>3.0f}".format(
-                     devices[dev].dRow, devices[dev].loc, y["time"], dev, round(ltemp,1), tScale, hum,
-                     0.0 if "snr" not in y else y['snr']) )
-            write_display_row_for_device(dev)
-            return  #From on_message()
+        process_msg(msg)
+        return
 
     mqtt.subscribe(topic)
     mqtt.on_message = on_message
     if debug:
         print("subscribed to mqtt feed")
     return #From subscribe()
+# End MQTT functions
+
+#######################################################################################  
+#  HTTP functions                                                                        
+#  Message producer thread for http stream                                               
+#  Listen for streamed http messages until 'exit_event' has been set,                    
+#    telling us to exit and close this thread.                                           
+def http_subscribe():
+    global debug
+    global msq_queue
+    global exit_event
+    url = f'http://{host}:{port}/stream'
+    headers = {'Accept': 'application/json'}
+
+    # We receive JSON events, one per line terminated with CRLF.                         
+    # On Events and Stream endpoints a keep-alive of CRLF will be send every 60 seconds. 
+    response = requests.get(url, headers=headers, timeout=70, stream=True)
+    print(f'Connected to {url}')
+
+    try:
+        # Open the HTTP (line) streaming API of JSON events                              
+        for line in response.iter_lines():
+            if debug:
+                print("HTTP received\n\t", line)
+            line = line.rstrip()
+            if not line:
+                # filter out keep-alive empty lines                                      
+                continue
+            #  We have a message.  Let the message processor handle it
+            process_msg(line)
+
+    except requests.ConnectionError:
+        print('Connection failed, retrying...')
+        sleep(5)
+        response = requests.get(url, headers=headers, timeout=70, stream=True)
+        print(f'Connected to {url}')
+
 
 ###############################################################################
 # Reset device warnings to OK and rewrite the display table accordingly
 def reset_warn():
-    mqtt.loop_stop()
     for dev in devices:
         devices[dev].battery = 1
         devices[dev].wlevel  = Warn.OK
         devices[dev].warn    = Warnings[Warn.OK]
     for row in range(1, len(tbl)):
         tbl[row][3].set(Warnings[Warn.OK])
-    mqtt.loop_start()
     return
 
 ##############################################################################
