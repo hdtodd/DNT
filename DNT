@@ -78,6 +78,10 @@ useF   = True
 tScale = "°F"
 
 # Variables and constants used globally
+global debug
+global msg
+global source
+
 HTTP       = 0
 MQTT       = 1
 win        = None
@@ -99,9 +103,6 @@ bl_flag    = "\U0000203C"  # '!!': want to use "\U0001FAAB" {low battery} but no
 st_flag    = "\U00002049"  # '?!'
 Warnings   = [" ", st_flag, bl_flag]
 Warn       = IntEnum('Warn', [ ('OK', 0), ('ALERT', 1), ('ALARM', 2)])
-
-global msg
-global source
 
 # Set 2-sec threshhold for rejecting duplicate records
 dup_thresh = 2.0
@@ -672,7 +673,6 @@ if __name__ == "__main__":
 
     global msg
     global source
-    global debug
     
     msg_q = Queue(0)
     t = datetime.datetime.now()
