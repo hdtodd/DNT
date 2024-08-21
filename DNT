@@ -232,11 +232,8 @@ def make_parser():
                         help="Connect to source with HTTP or MQTT? (default: %(default)s)")
     parser.add_argument("-H", "--host", dest="host", type=str, default=host,
                         help="HTTP or MQTT hostname to connect to (default: %(default)s)")
-    parser.add_argument("-p", "--port", type=int,
+    parser.add_argument("-P", "--port", type=int,
                         help="HTTP or MQTT port # (default: 8433 or 1883")
-    parser.add_argument("-d", "--debug", dest="debug", action="store_true")
-    parser.add_argument("-W", "--warn", dest="warn", action="store_true",
-                        help="Insert warnings at pkts 20 & 40 to debug; requires -d")
     specifyTemp = parser.add_mutually_exclusive_group()
     specifyTemp.add_argument("-C", "--Celsius", dest="degC",
                              action="store_true", default=False,
@@ -247,10 +244,13 @@ def make_parser():
     parser.add_argument("-T", "--topic", dest="topic", type=str,
                         default=topic,
                         help="(If needed) rtl_433 MQTT event topic to subscribe to (default: %(default)s)")
-    parser.add_argument("-U", "--username", type=str, default=username,
+    parser.add_argument("-u", "--username", type=str, default=username,
                         help="(If needed) MQTT username; defaults to blank")
-    parser.add_argument("-P", "--password", type=str, default=password,
+    parser.add_argument("-p", "--password", type=str, default=password,
                         help="(If needed) MQTT password; defaults to blank")
+    parser.add_argument("-d", "--debug", dest="debug", action="store_true")
+    parser.add_argument("-w", "--warn", dest="warn", action="store_true",
+                        help="Insert warnings at pkts 20 & 40 to debug; requires -d")
     args = parser.parse_args()
     return args
 
