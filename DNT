@@ -18,6 +18,7 @@ import random
 import json
 import time
 import datetime
+import threading
 import requests
 from enum import IntEnum
 from queue import Queue
@@ -79,7 +80,8 @@ tScale = "°F"
 
 # Variables and constants used globally
 global debug
-global msg
+global exit_event
+global msg_q
 global source
 
 HTTP       = 0
@@ -248,7 +250,9 @@ def make_parser():
                         help="(If needed) MQTT username; defaults to blank")
     parser.add_argument("-p", "--password", type=str, default=password,
                         help="(If needed) MQTT password; defaults to blank")
-    parser.add_argument("-d", "--debug", dest="debug", action="store_true")
+    parser.add_argument("-v", "--version", action="version", version=VERSION)
+    parser.add_argument("-d", "--debug", dest="debug", action="store_true",
+                        help="Print actions and messages during program execution")
     parser.add_argument("-w", "--warn", dest="warn", action="store_true",
                         help="Insert warnings at pkts 20 & 40 to debug; requires -d")
     args = parser.parse_args()
@@ -383,12 +387,10 @@ def toggle_fullscreen(event=None):
     fullscreen = not fullscreen
     if fullscreen:
         hfont.configure(size=max(36, int((win.winfo_height() / 18))))
-        bfont.configure(size=max(24, int((win.winfo_height() / 24))))
         dfont.configure(size=max(24, int((win.winfo_height() / 24))))
         lfont.configure(size=max(30, int((win.winfo_height() / 24))))
     else:
         hfont.configure(size=40)
-        bfont.configure(size=24)
         dfont.configure(size=18)
         lfont.configure(size=30, weight="bold")
     win.attributes('-fullscreen', fullscreen)
@@ -423,13 +425,15 @@ def add_row(dRow):
     return
 
 ###############################################################################
-
 # process_msg() does the real work of understanding and then presenting
 #   the data in the received message (from HTTP or MQTT)
-# If it's a thermometer reading.
-#   Ignore if it's a duplicate, update display if it isn't
+# If it's a thermometer reading:
+#   ignore if it's a duplicate, update display if it isn't
 
-def process_msg(msg):
+def process_msg():
+    global source
+    global exit_event
+    global msg_q
     global pktcnt
     global devices, tbl
 
@@ -481,77 +485,101 @@ def process_msg(msg):
                     break
         return
 
-    # parse the json payload
-    y = json.loads(msg.payload.decode())
+    while not exit_event.is_set():
+        msg = msg_q.get()
+        # If it's a null message, that's our signal to quit                              
+        if msg == None:
+            if source==MQTT:
+                mqtt.loop_stop()
+            if debug:
+                print("Stop processing thread in 'process_msg'")
+            break
 
-    # Ignore tire pressure monitoring system temp reports
-    if "type" in y and y["type"]=="TPMS":
-        return
+        # Try to parse the json payload from MQTT or HTTP
+        try:
+            if source==MQTT:
+                y = json.loads(msg.payload.decode())
+            else:
+                y = json.loads(codecs.decode(msg,"utf-8"))
+        except:
+            # Nope, can't serialize the packet                                       
+            print("Unable to load JSON fields from record:\n\t", end="")
+            if source==MQTT:
+                print(msg.payload.decode())
+            else:
+                print(codecs.decode(msg,"utf-8"))
+            continue
 
-    # If not a device record, just return
-    if "model" not in y:
-        return
+        # Got a real message: process it
+        # Ignore tire pressure monitoring system temp reports
+        if "type" in y and y["type"]=="TPMS":
+            continue
+        # If not a device record, just return
+        if "model" not in y:
+            continue
 
-    #  Create the device identifier as "model/channel/id"
-    dev = y["model"] + "/"
-    if "channel" in y:
-        dev += str(y["channel"])
-    dev += "/"
-    if "id" in y:
-        dev += str(y["id"])
+        #  Create the device identifier as "model/channel/id"
+        dev = y["model"] + "/"
+        if "channel" in y:
+            dev += str(y["channel"])
+        dev += "/"
+        if "id" in y:
+            dev += str(y["id"])
 
-    # if this is a themometer reading, process it; otherwise just return
-    if "temperature_C" in y.keys():
-        ltemp = y["temperature_C"]
-        if useF:
-            ltemp = ltemp*9.0/5.0+32.0
-    else:
-        if "temperature_F" in y.keys():
-            ltemp = y["temperature_F"]
-            if not useF:
-                ltemp = (ltemp-32.0)*5.0/9.0
+        # if this is a themometer reading, process it; otherwise just return
+        if "temperature_C" in y.keys():
+            ltemp = y["temperature_C"]
+            if useF:
+                ltemp = ltemp*9.0/5.0+32.0
         else:
-            return   # if no temp reading in record, ignore it
+            if "temperature_F" in y.keys():
+                ltemp = y["temperature_F"]
+                if not useF:
+                    ltemp = (ltemp-32.0)*5.0/9.0
+            else:
+                return   # if no temp reading in record, ignore it
 
-    # OK, we have a temp reading. Get the variables we need
-    (isoTime,eTime)  = CnvTime(y["time"])
-    loc     = dev if dev not in location else location[dev]
-    hum     = 0 if "humidity" not in y.keys() else int(y["humidity"])
-    battery = None if "battery_ok" not in y else y["battery_ok"]
-    status  = None if "status"     not in y else y["status"]
+        # OK, we have a temp reading. Get the variables we need
+        (isoTime,eTime)  = CnvTime(y["time"])
+        loc     = dev if dev not in location else location[dev]
+        hum     = 0 if "humidity" not in y.keys() else int(y["humidity"])
+        battery = None if "battery_ok" not in y else y["battery_ok"]
+        status  = None if "status"     not in y else y["status"]
 
-    # if debuging warnings (-d -W), inject warning conditions at pkts 10, 20
-    if debugW:
-        if pktcnt==10:
-            status = 9
-            print(CSIMGN, "Inserting status-code change for display debugging", CSIBLK)
-        if pktcnt==20:
-            battery = 0
-            print(CSIRED, "Inserting battery-low condition for display debugging", CSIBLK)
+        # if debuging warnings (-d -W), inject warning conditions at pkts 10, 20
+        if debugW:
+            if pktcnt==10:
+                status = 9
+                print(CSIMGN, "Inserting status-code change for display debugging", CSIBLK)
+            if pktcnt==20:
+                battery = 0
+                print(CSIRED, "Inserting battery-low condition for display debugging", CSIBLK)
 
-    # Got all the values: update if not a repeated packet, or add if new
-    if dev in devices:
-        # Not a duplicate: update the values in the dictionary
-        #  and retrieve display-table row number
-        dup = devices[dev].update(eTime, ltemp, hum, battery, status)
-        dRow = devices[dev].dRow
-    else:
-        # Append a new device to the ends of the "device" and display "tbl" lists
-        dRow = len(tbl)
-        devices[dev] = Data(dRow, eTime, loc, ltemp, hum, battery, status)
-        dup = False
-        if debug:
-            print("Appending new device", dev, " to end of tbl at row", dRow)
-        add_row(dRow)
-        place_row(dev)
-    if not dup:
-        pktcnt += 1
-        if debug:
-             print("Update display row{:>3d}: {:<30} {:<20} {:<30} {:>6.1f}{:2} {:>3}% snr={:>3.0f}".format(
-                 devices[dev].dRow, devices[dev].loc, y["time"], dev, round(ltemp,1), tScale, hum,
-                 0.0 if "snr" not in y else y['snr']) )
-        write_display_row_for_device(dev)
-        return  #From process_msg()
+        # Got all the values: update if not a repeated packet, or add if new
+        if dev in devices:
+            # Not a duplicate: update the values in the dictionary
+            #  and retrieve display-table row number
+            dup = devices[dev].update(eTime, ltemp, hum, battery, status)
+            dRow = devices[dev].dRow
+        else:
+            # Append a new device to the ends of the "device" and display "tbl" lists
+            dRow = len(tbl)
+            devices[dev] = Data(dRow, eTime, loc, ltemp, hum, battery, status)
+            dup = False
+            if debug:
+                print("Appending new device", dev, " to end of tbl at row", dRow)
+            add_row(dRow)
+            place_row(dev)
+        if not dup:
+            pktcnt += 1
+            if debug:
+                 print("Update display row{:>3d}: {:<30} {:<20} {:<30} {:>6.1f}{:2} {:>3}% snr={:>3.0f}".format(
+                     devices[dev].dRow, devices[dev].loc, y["time"], dev, round(ltemp,1), tScale, hum,
+                     0.0 if "snr" not in y else y['snr']) )
+            write_display_row_for_device(dev)
+
+    # No return: thread exits when exit_event is set or
+    #  when a "None" message is received from the message collector
 # End process_msg()
 
 ############################################################################### 
@@ -591,14 +619,16 @@ def mqtt_subscribe(mqtt: mqtt_client):
     # When we get an MQTT message, just pass it on to the
     #   message processor to handle, as it does for HTTP as well
     def on_message(mqtt, userdata, msg):
-        process_msg(msg)
+        global msg_q
+        msg_q.put(msg)
         return
 
     mqtt.subscribe(topic)
     mqtt.on_message = on_message
     if debug:
         print("subscribed to mqtt feed")
-    return #From subscribe()
+    mqtt.loop_start()
+    return #From mqtt_subscribe(), but 'on_message' is active as mqtt callback
 # End MQTT functions
 
 #######################################################################################  
@@ -608,7 +638,7 @@ def mqtt_subscribe(mqtt: mqtt_client):
 #    telling us to exit and close this thread.                                           
 def http_subscribe():
     global debug
-    global msq_queue
+    global msq_q
     global exit_event
     url = f'http://{host}:{port}/stream'
     headers = {'Accept': 'application/json'}
@@ -628,7 +658,9 @@ def http_subscribe():
                 # filter out keep-alive empty lines                                      
                 continue
             #  We have a message.  Let the message processor handle it
-            process_msg(line)
+            msg_q.put(line)
+            if exit_event.is_set():
+                break
 
     except requests.ConnectionError:
         print('Connection failed, retrying...')
@@ -636,6 +668,13 @@ def http_subscribe():
         response = requests.get(url, headers=headers, timeout=70, stream=True)
         print(f'Connected to {url}')
 
+    #  We get here when 'exit_event' has been set externally                             
+    #  Tell the consumer to quit by sending a 'None' message and return                  
+    #    to caller, terminating this thread                                              
+    msg_q.put(None)
+    if debug:
+        print('\nHTTP message collector exiting.')
+    return
 
 ###############################################################################
 # Reset device warnings to OK and rewrite the display table accordingly
@@ -658,16 +697,20 @@ def quit_prog():
     global source
     if debug:
         print("Quitting from quit_prog")
+    exit_event.set()
+    msg_q.put(None)
+    if source==HTTP:
+        print(CSIGRN, "\n\nWait for data collection to complete ...", CSIBLK)    
     win.destroy()
     if source==MQTT:
         mqtt.loop_stop()
         mqtt.disconnect()
-    sys.exit(0)
+    return
 
 ###############################################################################
 # Create the display panels and table section
 def create_display():    
-    global win, frm_table, dfont, hfont, lfont
+    global win, frm_table, dfont, hfont, lfont, src, port
     # Create the main window
     win = tk.Tk()
     win.title("Neighborhood Temperatures")
@@ -685,9 +728,10 @@ def create_display():
     lbl_title.pack(anchor="center", fill="x")
 
     # Build the information section
+    proto = "HTTP" if source==HTTP else "MQTT"
     frm_info = tk.Frame(win, borderwidth=5, relief="raised")
     frm_info.pack(side="top", fill="x", expand=False)
-    lbl_monitor = tk.Label(frm_info, text="Monitoring host: %s" % (host), font=dfont)
+    lbl_monitor = tk.Label(frm_info, text="Monitoring %s host %s:%d" % (proto,host,port), font=dfont)
     btn_wrst    = tk.Button(frm_info, text="WRst",           width=4, height=1,
                            font=dfont, fg='green',command=reset_warn)
     btn_toggle = tk.Button(frm_info, text="Togl",           width=4, height=1,
@@ -722,6 +766,7 @@ if __name__ == "__main__":
     global msg
     global source
     
+    exit_event = threading.Event()
     msg_q = Queue(0)
     t = datetime.datetime.now()
     signal.signal(signal.SIGINT, quit_prog)
@@ -737,23 +782,42 @@ if __name__ == "__main__":
     # Create the display
     create_display()
 
-    # Connect to the mqtt host and subscribe to the feed.                                
-    # This activates the on_message procedure in which                                   
-    #   MQTT events cause the displayed values to be updated                             
     if source==MQTT:
         mqtt = connect_mqtt()
-    
+
     if debug:
         print("Entering the main run loops")
         print("Start packet processing")
 
-    # connect to the mqtt host and subscribe to the feed.
-    #   MQTT events cause the displayed values to be updated
-    mqtt = connect_mqtt()
-    mqtt.loop_start()
+    # Start the consumer and producer threads.  Common consumer
+    #   but different methods for producing MQTT & HTTP messages
+    c = threading.Thread(target = process_msg, args=())
+    if source==MQTT:
+        p = threading.Thread(target = mqtt_subscribe, args=(mqtt,))
+    else:
+        if source==HTTP:
+            p = threading.Thread(target = http_subscribe, args=())
+        else:
+            print("?No protocol specified for data source.  Specifiy with `-S`")
+            sys.exit(1)
+    c.start()
+    p.start()
 
+    # And finally, start the tkinter main loop for the display window
+    #  It will be terminated by "quit_prog": CNTL-C or QUIT button
     if debug:
-        print("entering run loop")
-
-    # Start the main loop and let MQTT events populate the display table
+        print("Start window processing thread")
     win.mainloop()
+
+    # Exiting threads return control to here
+    p.join()
+    if debug:
+        print("Message collecting thread, 'subscribe, exited but processing thread continues")
+
+    c.join()
+    if debug:
+        print("Message processing thread, 'process_msg' exited; terminate normally")
+    print("Quitting ...")
+    sys.exit(0)
+
+# End main script

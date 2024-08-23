@@ -94,15 +94,15 @@ DNT requires information about the `rtl_433` service host:
 
 All but the host name are set to default values and may not need to be changed.  But if you're using MQTT and your `rtl_433` host MQTT broker parameters are set differently, these parameters may be provided in four different ways.  In decreasing order of precedence:
 
-1.  Command line switches [-H, -T, -U,-P, -p] override all other sources to specify HOST, TOPIC, USER, PASSWORD, or PORT, respectively.
+1.  Command line switches [-H, -P, -T, -u, -p] override all other sources to specify HOST, PORT, TOPIC, USER, or PASSWORD respectively.
 2.  These environment variables override internal variable assignments and avoid prompting:
 	*  MQTT\_HOST or HTTP\_HOST
 	*  MQTT\_PORT (default 1883) or HTTP\_PORT (default 8433)
-	*  MQTT\_TOPIC
-	*  MQTT\_USER (defaults to \"\" if not specified and not provided on command line)
-	*  MQTT\_PASSWORD (defaults to \"\" if not specified and not provided on command line)
+	*  MQTT\_TOPIC (default "rtl_433/+/events")
+	*  MQTT\_USER (defaults \"\")
+	*  MQTT\_PASSWORD (default \"\")
 3.  The required parameter values can be assigned within the program source code.   Default values are  set near the beginning of the DNT source code.
-4. If not specified on command line, provided via environment, or set as internal variable assignments in the Python source code, the program prompts for HOST and assigns defaults to TOPIC, USER, PASSWORD, and PORT.
+4. If not specified on command line, provided via environment, or set as internal variable assignments in the Python source code, the program prompts for HOST and assigns defaults to PORT,TOPIC, USER, and PASSWORD.
 
 ## Operation and Maintenance
 
@@ -110,7 +110,31 @@ You may have trouble identifying the location of the various thermometer remotes
 
 **Over time, the "id" number of your dictionary entries will change!**  When the batteries on the remote are depleted, the owner must reinstall new  batteries and re-synch the remote with the indoor thermometer: for most devices, the "id" changes.  Use `mosquitto_sub` or `mqTest` or `DNT -d` or `http_rtl` to monitor the devices transmitting in your neighborhood and update the "model/channel/id" value in the association dictionary accordingly.  Or catalog devices using the method below and edit entries from the list `rtl_433_stats` generates.
 
-### Debugging
+### Command-line Options and  Debugging
+
+The following options may be provided on the command line to provide parameters and manag
+e program operation:
+
+*  \[`-h` | `--help`\]  
+   Describes the command-line options
+*  \[`-S` | `--source`\] `[HTTP | MQTT]`  
+   Connect to the `rtl_433` service via HTTP or MQTT protocol (default MQTT)
+*  \[`-H` | `--host`\] `<MQTT Broker host name (string)>`  
+   Identify the MQTT broker on your local-area network that is publishing `rtl_433` packet infomation in JSON format
+*  \[`-P` | `--port`\] `<`rtl_433` service MQTT publishing port or HTTP stream port (integer)>   
+   *Only needed if modified on the server from the default 1883 for MQTT or 8433 for HTTP)*:  Specifies the port the rtl_433 service is using to broadcast rtl_433 messages
+*  \[`-C` | `--Celsius'\]
+   Display temperatures in degrees Celsius (default Fahrenheit)
+*  \[`-F` | `--Fahrenheit`\]
+   Display temperatures in degrees Fahrenheit (default)
+*  \[`-T` | `--topic`\] `<MQTT Broker rtl_433 topic (string)>`  
+   Identify the rtl_433 topic as it is being broadcast by the MQTT broker
+*  \[`-u` | `--username`\] `<MQTT Broker rtl_433 username (string)>`  
+   *Only needed if broker is secured*:  Username needed to access the MQTT broker
+*  \[`-p` | `--password`\] `<MQTT Broker rtl_433 password>`  
+   *Only needed if broker is secured*: Password  needed to access the MQTT broker
+*  \[`-v` | `--version`\]  
+   Displays the version of DNT
 
 Two command-line options may be useful for debugging or verifying `DNT` operation:
 
