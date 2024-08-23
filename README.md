@@ -123,9 +123,9 @@ e program operation:
    Identify the `rtl_433` HTTP or MQTT server on your local-area network that is publishing `rtl_433` packet infomation in JSON format
 *  \[`-P` | `--port`\] `<`rtl_433` service MQTT publishing port or HTTP stream port (integer)>   
    *Only needed if modified on the server from the default 1883 for MQTT or 8433 for HTTP)*:  Specifies the port the rtl_433 service is using to broadcast rtl_433 messages
-*  \[`-C` | `--Celsius'\]
+*  \[`-C` | `--Celsius'\]   
    Display temperatures in degrees Celsius (default Fahrenheit)
-*  \[`-F` | `--Fahrenheit`\]
+*  \[`-F` | `--Fahrenheit`\]   
    Display temperatures in degrees Fahrenheit (default)
 *  \[`-T` | `--topic`\] `<MQTT Broker rtl_433 topic (string)>`  
    Identify the rtl_433 topic as it is being broadcast by the MQTT broker
@@ -133,7 +133,7 @@ e program operation:
    *Only needed if broker is secured*:  Username needed to access the MQTT broker
 *  \[`-p` | `--password`\] `<MQTT Broker rtl_433 password>`  
    *Only needed if broker is secured*: Password  needed to access the MQTT broker
-*  \[`-v` | `--version`\]  
+*  \[`-v` | `--version`\]   
    Displays the version of DNT
 
 Two command-line options may be useful for debugging or verifying `DNT` operation:
