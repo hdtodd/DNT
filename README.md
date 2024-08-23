@@ -128,7 +128,7 @@ e program operation:
 *  \[`-F` | `--Fahrenheit`\]   
    Display temperatures in degrees Fahrenheit (default)
 *  \[`-T` | `--topic`\] `<MQTT Broker rtl_433 topic (string)>`  
-   Identify the rtl_433 topic as it is being broadcast by the MQTT broker
+   Identify the rtl_433 topic as it is being broadcast by the MQTT broker [default "rtl_433/+/events"]
 *  \[`-u` | `--username`\] `<MQTT Broker rtl_433 username (string)>`  
    *Only needed if broker is secured*:  Username needed to access the MQTT broker
 *  \[`-p` | `--password`\] `<MQTT Broker rtl_433 password>`  
