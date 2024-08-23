@@ -88,7 +88,7 @@ DNT requires information about the `rtl_433` service host:
 
 *  HTTP or MQTT host name
 *  host HTTP or MQTT port [if not the HTTP 8433 or MQTT 1883 standard port]
-*  MQTT topic (if using MQTT)
+*  MQTT topic [if using MQTT]
 *  MQTT login username [if MQTT is secured] 
 *  MQTT login password [if MQTT is secured] 
 
