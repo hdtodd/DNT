@@ -53,7 +53,7 @@ This system uses several components, all of which could be hosted on one compute
 * A host monitoring system that:
 	* Has an RTL_SDR dongle attached, to receive ISM broadcasts.  In the US, that band is at 433.92MHz, but the devices and software components function across the range of ISM bands used around the world. 
 	* Runs the `rtl_433` program to collect and analyze the ISM packets and publish the analyzed packets as JSON messages via HTTP or MQTT over your local network.
-	* Either is configured to stream data packets via HTTP or uns an MQTT broker to publish the ISM events seen by `rtl_433` via MQTT.
+	* Either is configured to stream data packets via HTTP or runs an MQTT broker to publish the ISM events seen by `rtl_433` via MQTT.
 
 The components are standard hardware and software components, easily obtained from online sources and well maintained. The only component included here is `DNT`: sources for the other components are provided in sections below.
 
