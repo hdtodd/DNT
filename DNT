@@ -53,9 +53,10 @@ AP_EPILOG="""
 #   those keywords and associated locations into the 'location' dictionary here
 
 location = {
-    "Acurite-609TXC//51"        : "Outside",
-    "Acurite-606TX//161"        : "Porch",
-    "LaCrosse-TX141THBv2/0/168" : "Frank 168",
+    "Acurite-609TXC//99"        : "Deck",
+    "Acurite-606TX/1/212"       : "Sun Room",
+    "Acurite-609TXC//199"       : "Office",
+    "Acurite-Tower/A/4652"      : "Schmidts",
     }
 
 ##  *** END LOCAL MODIFICATIONS ***
@@ -111,86 +112,6 @@ Warn       = IntEnum('Warn', [ ('OK', 0), ('ALERT', 1), ('ALARM', 2)])
 dup_thresh = 2.0
 
 ##########################################################################################
-# DoubleScrolledFrame class adapted from
-#   https://gist.github.com/novel-yet-trivial/2841b7b640bba48928200ff979204115
-class DoubleScrolledFrame:
-    """
-    A vertically scrolled Frame that can be treated like any other Frame
-    ie it needs a master and layout and it can be a master.
-    keyword arguments are passed to the underlying Frame
-    except the keyword arguments 'width' and 'height', which
-    are passed to the underlying Canvas
-    note that a widget layed out in this frame will have Canvas as self.master,
-    if you subclass this there is no built in way for the children to access it.
-    You need to provide the controller separately.
-    """
-    def __init__(self, master, **kwargs):
-        width = kwargs.pop('width', None)
-        height = kwargs.pop('height', None)
-        self.outer = tk.Frame(master, **kwargs)
-
-        self.vsb = ttk.Scrollbar(self.outer, orient=tk.VERTICAL)
-        self.vsb.grid(row=0, column=1, sticky='ns')
-        self.hsb = ttk.Scrollbar(self.outer, orient=tk.HORIZONTAL)
-        self.hsb.grid(row=1, column=0, sticky='ew')
-        self.canvas = tk.Canvas(self.outer, highlightthickness=0, width=width, height=height)
-        self.canvas.grid(row=0, column=0, sticky='nsew')
-        self.outer.rowconfigure(0, weight=1)
-        self.outer.columnconfigure(0, weight=1)
-        self.canvas['yscrollcommand'] = self.vsb.set
-        self.canvas['xscrollcommand'] = self.hsb.set
-        # mouse scroll does not seem to work with just "bind"; You have
-        # to use "bind_all". Therefore to use multiple windows you have
-        # to bind_all in the current widget
-        self.canvas.bind("<Enter>", self._bind_mouse)
-        self.canvas.bind("<Leave>", self._unbind_mouse)
-        self.vsb['command'] = self.canvas.yview
-        self.hsb['command'] = self.canvas.xview
-
-        self.inner = tk.Frame(self.canvas)
-        # pack the inner Frame into the Canvas with the topleft corner 4 pixels offset
-        self.canvas.create_window(4, 4, window=self.inner, anchor='nw')
-        self.inner.bind("<Configure>", self._on_frame_configure)
-
-        self.outer_attr = set(dir(tk.Widget))
-
-    def __getattr__(self, item):
-        if item in self.outer_attr:
-            # geometry attributes etc (eg pack, destroy, tkraise) are passed on to self.outer
-            return getattr(self.outer, item)
-        else:
-            # all other attributes (_w, children, etc) are passed to self.inner
-            return getattr(self.inner, item)
-
-    def _on_frame_configure(self, event=None):
-        x1, y1, x2, y2 = self.canvas.bbox("all")
-        height = self.canvas.winfo_height()
-        width = self.canvas.winfo_width()
-        self.canvas.config(scrollregion = (0,0, max(x2, width), max(y2, height)))
-
-    def _bind_mouse(self, event=None):
-        self.canvas.bind_all("<4>", self._on_mousewheel)
-        self.canvas.bind_all("<5>", self._on_mousewheel)
-        self.canvas.bind_all("<MouseWheel>", self._on_mousewheel)
-
-    def _unbind_mouse(self, event=None):
-        self.canvas.unbind_all("<4>")
-        self.canvas.unbind_all("<5>")
-        self.canvas.unbind_all("<MouseWheel>")
-        
-    def _on_mousewheel(self, event):
-        """Linux uses event.num; Windows / Mac uses event.delta"""
-        func = self.canvas.xview_scroll if event.state & 1 else self.canvas.yview_scroll 
-        if event.num == 4 or event.delta > 0:
-            func(-1, "units" )
-        elif event.num == 5 or event.delta < 0:
-            func(1, "units" )
-    
-    def __str__(self):
-        return str(self.outer)
-
-
-##########################################################################################
 # Define a class to hold the data for a device and procedures to create, update, access
 class Data:
     def __init__(self, dRow, eTime, loc, temp, hum, battery, status):
@@ -222,7 +143,36 @@ class Data:
         return dup
 # End class Data definition
 
+##############################################################################
+# Convert time string (ts) from ISO format to epoch time                                 
+# Or, if ts is in epoch time, convert to timestamp format.                               
+# Return both formats for use in processing and displaying                               
+def CnvTime(ts):
+    if ts.find("-") > 0:
+        try:
+            eTime = datetime.datetime.fromisoformat(ts).timestamp()
+            timestamp = ts
+        except ValueError as e:
+            err={}
+            print("datetime error in input line converting time string: ", ts)
+            print("datetime  msg:", err.get("error", str(e)))
+            sys.exit(1)
+    else:
+        try:
+            eTime = float(ts)
+            timestamp = datetime.datetime.fromtimestamp(eTime)
+        except ValueError as e:
+            err = {}
+            print("Datetime conversion failed on line with datetime string", ts)
+            print("float() error msg:", err.get("error", str(e)))
+            sys.exit(1)
+
+    return(timestamp, eTime)
+# End CnvTime()
+
 ###############################################################################
+#  Command-line processing
+
 #  Create the command parser, parse cmd line,  and set defaults
 def make_parser():
 
@@ -260,7 +210,7 @@ def make_parser():
     return args
 
 ###############################################################################
-# Set execution parameters from cmdline
+# Set execution parameters from defaults and the cmdline
 def set_params():
     global source, host, topic, username, password, port, useF, tScale, debug, debugW
 
@@ -346,40 +296,89 @@ def set_params():
         print("\tUseF:         ", useF)
         print("\tDebug warnings", debugW)
     return
+#  End set execution parameters from defaults and the cmdline
+#  End Command-line processing
 
-# End set execution parameters from defaults and the cmdline
-# End command-line and parameter-setting function
+##########################################################################################
+# Window management functions
 
-##############################################################################
-# Convert time string (ts) from ISO format to epoch time                                 
-# Or, if ts is in epoch time, convert to timestamp format.                               
-# Return both formats for use in processing and displaying                               
-def CnvTime(ts):
-    if ts.find("-") > 0:
-        try:
-            eTime = datetime.datetime.fromisoformat(ts).timestamp()
-            timestamp = ts
-        except ValueError as e:
-            err={}
-            print("datetime error in input line converting time string: ", ts)
-            print("datetime  msg:", err.get("error", str(e)))
-            sys.exit(1)
-    else:
-        try:
-            eTime = float(ts)
-            timestamp = datetime.datetime.fromtimestamp(eTime)
-        except ValueError as e:
-            err = {}
-            print("Datetime conversion failed on line with datetime string", ts)
-            print("float() error msg:", err.get("error", str(e)))
-            sys.exit(1)
+# DoubleScrolledFrame class adapted from
+#   https://gist.github.com/novel-yet-trivial/2841b7b640bba48928200ff979204115
+class DoubleScrolledFrame:
+    """
+    A vertically scrolled Frame that can be treated like any other Frame
+    ie it needs a master and layout and it can be a master.
+    keyword arguments are passed to the underlying Frame
+    except the keyword arguments 'width' and 'height', which
+    are passed to the underlying Canvas
+    note that a widget layed out in this frame will have Canvas as self.master,
+    if you subclass this there is no built in way for the children to access it.
+    You need to provide the controller separately.
+    """
+    def __init__(self, master, **kwargs):
+        width = kwargs.pop('width', None)
+        height = kwargs.pop('height', None)
+        self.outer = tk.Frame(master, **kwargs)
 
-    return(timestamp, eTime)
-# End CnvTime()
+        self.vsb = ttk.Scrollbar(self.outer, orient=tk.VERTICAL)
+        self.vsb.grid(row=0, column=1, sticky='ns')
+        self.hsb = ttk.Scrollbar(self.outer, orient=tk.HORIZONTAL)
+        self.hsb.grid(row=1, column=0, sticky='ew')
+        self.canvas = tk.Canvas(self.outer, highlightthickness=0, width=width, height=height)
+        self.canvas.grid(row=0, column=0, sticky='nsew')
+        self.outer.rowconfigure(0, weight=1)
+        self.outer.columnconfigure(0, weight=1)
+        self.canvas['yscrollcommand'] = self.vsb.set
+        self.canvas['xscrollcommand'] = self.hsb.set
+        # mouse scroll does not seem to work with just "bind"; You have
+        # to use "bind_all". Therefore to use multiple windows you have
+        # to bind_all in the current widget
+        self.canvas.bind("<Enter>", self._bind_mouse)
+        self.canvas.bind("<Leave>", self._unbind_mouse)
+        self.vsb['command'] = self.canvas.yview
+        self.hsb['command'] = self.canvas.xview
 
-###############################################################################
-# Functions for displaying
+        self.inner = tk.Frame(self.canvas)
+        # pack the inner Frame into the Canvas with the topleft corner 4 pixels offset
+        self.canvas.create_window(4, 4, window=self.inner, anchor='nw')
+        self.inner.bind("<Configure>", self._on_frame_configure)
 
+        self.outer_attr = set(dir(tk.Widget))
+
+    def __getattr__(self, item):
+        if item in self.outer_attr:
+            # geometry attributes etc (eg pack, destroy, tkraise) are passed on to self.outer
+            return getattr(self.outer, item)
+        else:
+            # all other attributes (_w, children, etc) are passed to self.inner
+            return getattr(self.inner, item)
+
+    def _on_frame_configure(self, event=None):
+        x1, y1, x2, y2 = self.canvas.bbox("all")
+        height = self.canvas.winfo_height()
+        width = self.canvas.winfo_width()
+        self.canvas.config(scrollregion = (0,0, max(x2, width), max(y2, height)))
+
+    def _bind_mouse(self, event=None):
+        self.canvas.bind_all("<4>", self._on_mousewheel)
+        self.canvas.bind_all("<5>", self._on_mousewheel)
+        self.canvas.bind_all("<MouseWheel>", self._on_mousewheel)
+
+    def _unbind_mouse(self, event=None):
+        self.canvas.unbind_all("<4>")
+        self.canvas.unbind_all("<5>")
+        self.canvas.unbind_all("<MouseWheel>")
+        
+    def _on_mousewheel(self, event):
+        """Linux uses event.num; Windows / Mac uses event.delta"""
+        func = self.canvas.xview_scroll if event.state & 1 else self.canvas.yview_scroll 
+        if event.num == 4 or event.delta > 0:
+            func(-1, "units" )
+        elif event.num == 5 or event.delta < 0:
+            func(1, "units" )
+    
+    def __str__(self):
+        return str(self.outer)
 
 # Toggle fullscreen                                                                      
 def toggle_fullscreen(event=None):
@@ -398,9 +397,7 @@ def toggle_fullscreen(event=None):
     win.attributes('-fullscreen', fullscreen)
     return
 
-#######################################################################################
 # Table management and display
-
 # Add a row to the display table, "tbl", at current next-entry index and increment the index
 # Format the widgets, and handle row 0 differently as it is the header
 # Widget values get filled in by "main" (for header) or "on_message" (for data values)
@@ -425,6 +422,69 @@ def add_row(dRow):
     lbl_flag.grid(row=dRow, column=3, padx=5, pady=5, sticky=tk.E)
     row.pack(side="top")
     return
+
+# Create the display panels and table section
+def create_display():    
+    global win, frm_table, dfont, hfont, lfont, src, port
+    # Create the main window
+    win = tk.Tk()
+    win.title("Neighborhood Temperatures")
+
+    # Create dynamic font for text
+    hfont = tkFont.Font(size=-36)
+    dfont = tkFont.Font(size=-24)
+    lfont = tkFont.Font(size=-30, weight="bold")
+
+    # Build the title section of the display
+    frm_title = tk.Frame(win, borderwidth=10, relief="groove")
+    frm_title.pack(side="top", fill="x", expand=False)
+    lbl_title = tk.Label(frm_title, text="Display Neighborhood Temperatures",
+                         font=hfont, bg="cornflower blue", fg="white")
+    lbl_title.pack(anchor="center", fill="x")
+
+    # Build the information section
+    proto = "HTTP" if source==HTTP else "MQTT"
+    frm_info = tk.Frame(win, borderwidth=5, relief="raised")
+    frm_info.pack(side="top", fill="x", expand=False)
+    lbl_monitor = tk.Label(frm_info, text="Monitoring %s host %s:%d" % (proto,host,port), font=dfont)
+    btn_wrst    = tk.Button(frm_info, text="WRst",           width=4, height=1,
+                           font=dfont, fg='green',command=reset_warn)
+    btn_toggle = tk.Button(frm_info, text="Togl",           width=4, height=1,
+                           font=dfont, fg='blue', command=toggle_fullscreen)
+    btn_quit   = tk.Button(frm_info, text="Quit",           width=4,  height=1,
+                           font=dfont, fg='red',  command=quit_prog)
+    lbl_monitor.pack(side="left", padx=2, pady=2)
+    btn_quit.pack(side="right")
+    btn_toggle.pack(side="right")
+    btn_wrst.pack(side="right")
+    
+    # And create the table for data display
+    frm_table = DoubleScrolledFrame(win, width=700, borderwidth=5, relief=tk.GROOVE)
+    frm_table.pack(side="top", fill="both", expand=True, padx=5, pady=5)
+
+    # First, the header
+    add_row(0)
+    tbl[0][0].set("Location or Thermometer")
+    tbl[0][1].set("Temp "+tScale)
+    tbl[0][2].set("%RH")
+    tbl[0][3].set(Warn_Sign)
+
+    # Have <ESC> toggle window, and call resize() every time the window is resized
+    win.bind('<Escape>', toggle_fullscreen)
+    return
+#  End create_display()
+
+# Reset device warnings to OK and rewrite the display table accordingly
+def reset_warn():
+    for dev in devices:
+        devices[dev].battery = 1
+        devices[dev].wlevel  = Warn.OK
+        devices[dev].warn    = Warnings[Warn.OK]
+    for row in range(1, len(tbl)):
+        tbl[row][3].set(Warnings[Warn.OK])
+    return
+
+#  End window management functions
 
 ###############################################################################
 # process_msg() does the real work of understanding and then presenting
@@ -585,7 +645,8 @@ def process_msg():
 # End process_msg()
 
 ############################################################################### 
-# MQTT functions and message reception
+#  MQTT functions and message reception
+#  Message producer thread for MQTT stream                                               
 
 # Connect to  MQTT host
 def connect_mqtt() -> mqtt_client:
@@ -601,7 +662,7 @@ def connect_mqtt() -> mqtt_client:
             sys.exit(1)
         return #from on_connect()
     
-# Work around paho-mqtt v1, v2+ Client instantiation parameter diffs
+    # Work around paho-mqtt v1, v2+ Client instantiation parameter diffs
     try:
         mqtt = mqtt_client.Client(client_id, clean_session=False)
     except:
@@ -614,10 +675,8 @@ def connect_mqtt() -> mqtt_client:
     mqtt_subscribe(mqtt)
     return mqtt
 
-###############################################################################
 # Subscribe to rtl_433 publication & process records we receive
 def mqtt_subscribe(mqtt: mqtt_client):
-
     # When we get an MQTT message, just pass it on to the
     #   message processor to handle, as it does for HTTP as well
     def on_message(mqtt, userdata, msg):
@@ -631,10 +690,11 @@ def mqtt_subscribe(mqtt: mqtt_client):
         print("subscribed to mqtt feed")
     mqtt.loop_start()
     return #From mqtt_subscribe(), but 'on_message' is active as mqtt callback
-# End MQTT functions
+# End MQTT functions and message reception
 
 #######################################################################################  
-#  HTTP functions                                                                        
+#  HTTP functions and message reception
+
 #  Message producer thread for http stream                                               
 #  Listen for streamed http messages until 'exit_event' has been set,                    
 #    telling us to exit and close this thread.                                           
@@ -684,17 +744,7 @@ def http_subscribe():
     if debug:
         print('\nHTTP message collector exiting.')
     return
-
-###############################################################################
-# Reset device warnings to OK and rewrite the display table accordingly
-def reset_warn():
-    for dev in devices:
-        devices[dev].battery = 1
-        devices[dev].wlevel  = Warn.OK
-        devices[dev].warn    = Warnings[Warn.OK]
-    for row in range(1, len(tbl)):
-        tbl[row][3].set(Warnings[Warn.OK])
-    return
+#  END HTTP functions and message reception
 
 ##############################################################################
 # CNTL-C and QUIT button handler                                                         
@@ -714,57 +764,6 @@ def quit_prog():
     if source==MQTT:
         mqtt.loop_stop()
         mqtt.disconnect()
-    return
-
-###############################################################################
-# Create the display panels and table section
-def create_display():    
-    global win, frm_table, dfont, hfont, lfont, src, port
-    # Create the main window
-    win = tk.Tk()
-    win.title("Neighborhood Temperatures")
-
-    # Create dynamic font for text
-    hfont = tkFont.Font(size=-36)
-    dfont = tkFont.Font(size=-24)
-    lfont = tkFont.Font(size=-30, weight="bold")
-
-    # Build the title section of the display
-    frm_title = tk.Frame(win, borderwidth=10, relief="groove")
-    frm_title.pack(side="top", fill="x", expand=False)
-    lbl_title = tk.Label(frm_title, text="Display Neighborhood Temperatures",
-                         font=hfont, bg="cornflower blue", fg="white")
-    lbl_title.pack(anchor="center", fill="x")
-
-    # Build the information section
-    proto = "HTTP" if source==HTTP else "MQTT"
-    frm_info = tk.Frame(win, borderwidth=5, relief="raised")
-    frm_info.pack(side="top", fill="x", expand=False)
-    lbl_monitor = tk.Label(frm_info, text="Monitoring %s host %s:%d" % (proto,host,port), font=dfont)
-    btn_wrst    = tk.Button(frm_info, text="WRst",           width=4, height=1,
-                           font=dfont, fg='green',command=reset_warn)
-    btn_toggle = tk.Button(frm_info, text="Togl",           width=4, height=1,
-                           font=dfont, fg='blue', command=toggle_fullscreen)
-    btn_quit   = tk.Button(frm_info, text="Quit",           width=4,  height=1,
-                           font=dfont, fg='red',  command=quit_prog)
-    lbl_monitor.pack(side="left", padx=2, pady=2)
-    btn_quit.pack(side="right")
-    btn_toggle.pack(side="right")
-    btn_wrst.pack(side="right")
-    
-    # And create the table for data display
-    frm_table = DoubleScrolledFrame(win, width=700, borderwidth=5, relief=tk.GROOVE)
-    frm_table.pack(side="top", fill="both", expand=True, padx=5, pady=5)
-
-    # First, the header
-    add_row(0)
-    tbl[0][0].set("Location or Thermometer")
-    tbl[0][1].set("Temp "+tScale)
-    tbl[0][2].set("%RH")
-    tbl[0][3].set(Warn_Sign)
-
-    # Have <ESC> toggle window, and call resize() every time the window is resized
-    win.bind('<Escape>', toggle_fullscreen)
     return
 
 ###############################################################################
