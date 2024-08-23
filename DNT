@@ -336,6 +336,7 @@ def set_params():
     if debug:
         print("Debug is ON")
         print("Parameter settings in execution are ...")
+        print("\tConnect to data source via ", "HTTP" if source==HTTP else "MQTT")
         print("\tHTTP/MQTT host:    ", host)
         print("\tHTTP/MQTT port:    ", port)
         print("\tMQTT topic:   ", topic)
