@@ -119,8 +119,8 @@ e program operation:
    Describes the command-line options
 *  \[`-S` | `--source`\] `[HTTP | MQTT]`  
    Connect to the `rtl_433` service via HTTP or MQTT protocol (default MQTT)
-*  \[`-H` | `--host`\] `<MQTT Broker host name (string)>`  
-   Identify the MQTT broker on your local-area network that is publishing `rtl_433` packet infomation in JSON format
+*  \[`-H` | `--host`\] `<HTTP streaming or MQTT Broker host name (string)>`  
+   Identify the `rtl_433` HTTP or MQTT server on your local-area network that is publishing `rtl_433` packet infomation in JSON format
 *  \[`-P` | `--port`\] `<`rtl_433` service MQTT publishing port or HTTP stream port (integer)>   
    *Only needed if modified on the server from the default 1883 for MQTT or 8433 for HTTP)*:  Specifies the port the rtl_433 service is using to broadcast rtl_433 messages
 *  \[`-C` | `--Celsius'\]
