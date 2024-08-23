@@ -99,10 +99,10 @@ All but the host name are set to default values and may not need to be changed. 
 	*  MQTT\_HOST or HTTP\_HOST
 	*  MQTT\_PORT (default 1883) or HTTP\_PORT (default 8433)
 	*  MQTT\_TOPIC (default "rtl_433/+/events")
-	*  MQTT\_USER (defaults \"\")
+	*  MQTT\_USER (default \"\")
 	*  MQTT\_PASSWORD (default \"\")
 3.  The required parameter values can be assigned within the program source code.   Default values are  set near the beginning of the DNT source code.
-4. If not specified on command line, provided via environment, or set as internal variable assignments in the Python source code, the program prompts for HOST and assigns defaults to PORT,TOPIC, USER, and PASSWORD.
+4. If not specified on command line, provided via environment, or set as internal variable assignments in the Python source code, the program prompts for HOST and assigns defaults to PORT, TOPIC, USER, and PASSWORD.
 
 ## Operation and Maintenance
 
