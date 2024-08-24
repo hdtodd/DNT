@@ -232,7 +232,7 @@ def stream_lines():
     url = f'http://{host}:{port}/stream'
     headers = {'Accept': 'application/json'}
 
-    # You will receive JSON events, one per line terminated with CRLF.
+    # We will receive JSON events, one per line terminated with CRLF.
     # On Events and Stream endpoints a keep-alive of CRLF will be send every 60 seconds.
     response = requests.get(url, headers=headers, timeout=70, stream=True)
     print(CSIGRN, f'Connected to {url}', CSIBLK)
@@ -245,13 +245,11 @@ def producer():
     global debug
     global msq_queue
     global exit_event
-    # We receive JSON events, one per line terminated with CRLF.
-    # On Events and Stream endpoints a keep-alive of CRLF will be send every 60 seconds.
 
     while not exit_event.is_set():
         try:
+            # Open the HTTP (line) streaming API of JSON events
             for line in stream_lines():
-                # Open the HTTP (line) streaming API of JSON events
                 if debug:
                     print(line)
                 line = line.rstrip()
@@ -306,8 +304,9 @@ if __name__ == "__main__":
     p.start()
 
     # We get here when the threads exit and terminate
-    #   Let the threads return to this control program and exit
     c.join()
-    print("Consumer exited")
+    if debug:
+        print("Consumer exited")
     p.join()
-    print("Producer exited")
+    if debug:
+        print("Producer exited")
