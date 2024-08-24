@@ -216,14 +216,7 @@ def set_params():
 
     args = make_parser()
 
-    #  We need to know if we're connecting to the source via HTTP or MQTT
-    #  Should be set to MQTT by parser by default, but check
-    if not args.source_str:
-        if source is None:
-            while True:
-                args.source_str = input("Connect to source via HTTP or MQTT?: ")
-                if args.source_str=="HTTP" or args.source_str=="MQTT":
-                    break
+    #  Set protocol for network connection
     source = HTTP if args.source_str=="HTTP" else MQTT
 
     #  We need host name or IP, so if not already provided by
