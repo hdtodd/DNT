@@ -54,9 +54,8 @@ AP_EPILOG="""
 
 location = {
     "Acurite-609TXC//99"        : "Deck",
-    "Acurite-606TX/1/212"       : "Sun Room",
     "Acurite-609TXC//199"       : "Office",
-    "Acurite-Tower/A/4652"      : "Schmidts",
+    "Acurite-606TX/1/212"       : "Sun Room",
     }
 
 ##  *** END LOCAL MODIFICATIONS ***
@@ -85,6 +84,7 @@ global debug
 global exit_event
 global msg_q
 global source
+global my_clk
 
 HTTP       = 0
 MQTT       = 1
@@ -93,6 +93,7 @@ frm_table  = None
 fullscreen = False
 dfont      = None
 hfont      = None
+ifont      = None
 lfont      = None
 pktcnt     = 0
 debug      = False
@@ -382,10 +383,12 @@ def toggle_fullscreen(event=None):
     if fullscreen:
         hfont.configure(size=max(36, int((win.winfo_height() / 18))))
         dfont.configure(size=max(24, int((win.winfo_height() / 24))))
+        ifont.configure(size=max(18, int((win.winfo_height() / 18))))
         lfont.configure(size=max(30, int((win.winfo_height() / 24))))
     else:
         hfont.configure(size=40)
-        dfont.configure(size=18)
+        dfont.configure(size=24)
+        ifont.configure(size=18)
         lfont.configure(size=30, weight="bold")
     win.attributes('-fullscreen', fullscreen)
     return
@@ -418,14 +421,18 @@ def add_row(dRow):
 
 # Create the display panels and table section
 def create_display():    
-    global win, frm_table, dfont, hfont, lfont, src, port
+    global win, frm_table, dfont, hfont, ifont, lfont, src, port, my_clk
+
     # Create the main window
     win = tk.Tk()
     win.title("Neighborhood Temperatures")
 
+    my_clk = tk.StringVar()
+    
     # Create dynamic font for text
     hfont = tkFont.Font(size=-36)
     dfont = tkFont.Font(size=-24)
+    ifont = tkFont.Font(size=-18)
     lfont = tkFont.Font(size=-30, weight="bold")
 
     # Build the title section of the display
@@ -439,14 +446,16 @@ def create_display():
     proto = "HTTP" if source==HTTP else "MQTT"
     frm_info = tk.Frame(win, borderwidth=5, relief="raised")
     frm_info.pack(side="top", fill="x", expand=False)
-    lbl_monitor = tk.Label(frm_info, text="Monitoring %s host %s:%d" % (proto,host,port), font=dfont)
+    lbl_monitor = tk.Label(frm_info, text="Monitoring %s host %s:%d @" % (proto,host,port), font=ifont)
+    lbl_clock   = tk.Label(frm_info, textvariable=my_clk, font=ifont)
     btn_wrst    = tk.Button(frm_info, text="WRst",           width=4, height=1,
-                           font=dfont, fg='green',command=reset_warn)
-    btn_toggle = tk.Button(frm_info,  text="Togl",           width=4, height=1,
-                           font=dfont, fg='blue', command=toggle_fullscreen)
-    btn_quit   = tk.Button(frm_info,  text="Quit",           width=4,  height=1,
-                           font=dfont, fg='red',  command=quit_prog)
+                           font=ifont, fg='green',command=reset_warn)
+    btn_toggle  = tk.Button(frm_info, text="Togl",           width=4, height=1,
+                           font=ifont, fg='blue', command=toggle_fullscreen)
+    btn_quit    = tk.Button(frm_info, text="Quit",           width=4,  height=1,
+                           font=ifont, fg='red',  command=quit_prog)
     lbl_monitor.pack(side="left", padx=2, pady=2)
+    lbl_clock.pack(side="left", padx=2, pady=2)
     btn_quit.pack(side="right")
     btn_toggle.pack(side="right")
     btn_wrst.pack(side="right")
@@ -491,7 +500,8 @@ def process_msg():
     global msg_q
     global pktcnt
     global devices, tbl
-
+    global my_clk
+    
     def write_display_row_for_device(dev):
         dRow = devices[dev].dRow
         try:
@@ -596,11 +606,12 @@ def process_msg():
 
         # OK, we have a temp reading. Get the variables we need
         (isoTime,eTime)  = CnvTime(y["time"])
+        dtime   = datetime.datetime.fromisoformat(y["time"]).strftime("%H:%M:%S")
         loc     = dev if dev not in location else location[dev]
         hum     = 0 if "humidity" not in y.keys() else int(y["humidity"])
         battery = None if "battery_ok" not in y else y["battery_ok"]
         status  = None if "status"     not in y else y["status"]
-
+        
         # if debuging warnings (-d -W), inject warning conditions at pkts 10, 20
         if debugW:
             if pktcnt==10:
@@ -632,7 +643,8 @@ def process_msg():
                      devices[dev].dRow, devices[dev].loc, y["time"], dev, round(ltemp,1), tScale, hum,
                      0.0 if "snr" not in y else y['snr']) )
             write_display_row_for_device(dev)
-
+            my_clk.set(dtime)
+            
     # No return: thread exits when exit_event is set or
     #  when a "None" message is received from the message collector
 # End process_msg()
@@ -707,6 +719,7 @@ def http_subscribe():
     global debug
     global msq_q
     global exit_event
+    global my_clk
 
     # We receive JSON events, one per line terminated with CRLF.                         
     # On Events and Stream endpoints a keep-alive of CRLF will be send every 60 seconds. 
@@ -727,6 +740,7 @@ def http_subscribe():
         except requests.ConnectionError:
             if exit_event.is_set():
                 break
+            my_clk.set("Offline")
             print('Connection failed, retrying...')
             sleep(5)
 
