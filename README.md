@@ -21,7 +21,7 @@ The `DNT` program opens a scrollable, resizable display window with columns for 
 
 ## The Display Window
 
-In its upper panel, the display window indicates the `rtl_433` host that it is monitoring and the communication protocol.  It also provides three buttons:
+In its upper panel, the display window indicates the communication protocol being used to connect to the `rtl_433` host that it is monitoring, the host name/IP and port, and the time *of the last message seen as reported by the `rtl_433` server*.  It also provides three buttons:
 
 1.  "WRst" is the *Warning Reset* button: it clears the warning flags for all devices (the last column of the data display -- see below).
 1. "Togl" toggles the display window between full screen and reduced size.
