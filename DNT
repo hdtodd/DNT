@@ -442,9 +442,9 @@ def create_display():
     lbl_monitor = tk.Label(frm_info, text="Monitoring %s host %s:%d" % (proto,host,port), font=dfont)
     btn_wrst    = tk.Button(frm_info, text="WRst",           width=4, height=1,
                            font=dfont, fg='green',command=reset_warn)
-    btn_toggle = tk.Button(frm_info, text="Togl",           width=4, height=1,
+    btn_toggle = tk.Button(frm_info,  text="Togl",           width=4, height=1,
                            font=dfont, fg='blue', command=toggle_fullscreen)
-    btn_quit   = tk.Button(frm_info, text="Quit",           width=4,  height=1,
+    btn_quit   = tk.Button(frm_info,  text="Quit",           width=4,  height=1,
                            font=dfont, fg='red',  command=quit_prog)
     lbl_monitor.pack(side="left", padx=2, pady=2)
     btn_quit.pack(side="right")

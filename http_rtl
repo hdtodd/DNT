@@ -2,7 +2,7 @@
 # http_rtl
 # hdtodd@gmail.com,2024.08
 
-VERSION="1.0"
+VERSION="1.1"
 
 """
   Custom data handling example for rtl_433's HTTP (line) streaming API of JSON events.
