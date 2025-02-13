@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+# Program to confirm that the rtl_433 server is streaming JSON via HTTP
+# David Todd, hdtodd@gmail.com
+
 """Custom data handling example for rtl_433's HTTP (line) streaming API of JSON events."""
 
 # Start rtl_433 (`rtl_433 -F http`), then this script.
@@ -12,11 +15,13 @@ from time import sleep
 # You can run rtl_433 and this script on different machines,
 # start rtl_433 with `-F http:0.0.0.0`, and change
 # to e.g. `HTTP_HOST = "192.168.1.100"` (use your server ip) below.
-HTTP_HOST = "pi-1h"
+HTTP_HOST = " "
 HTTP_PORT = 8433
 
-
 def stream_lines():
+    global HTTP_HOST
+    if HTTP_HOST == " ":
+        HTTP_HOST = input("Host name or IP number for rtl_433 streaming: ")
     url = f'http://{HTTP_HOST}:{HTTP_PORT}/stream'
     headers = {'Accept': 'application/json'}
 
@@ -38,10 +43,10 @@ def handle_event(line):
         # Change for your custom handling below, this is a simple example
         #
         label = data["model"]
+        if "id" in data:
+            label += ".ID" + str(data["id"])
         if "channel" in data:
             label += ".CH" + str(data["channel"])
-        elif "id" in data:
-            label += ".ID" + str(data["id"])
 
         # E.g. match `model` and `id` to a descriptive name.
         if data["model"] == "LaCrosse-TX" and data["id"] == 123:
@@ -88,6 +93,7 @@ def rtl_433_listen():
 
 
 if __name__ == "__main__":
+    print("stream: confirm HTTP streaming from an rtl_433 host")
     try:
         rtl_433_listen()
     except KeyboardInterrupt:
