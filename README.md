@@ -29,7 +29,7 @@ In its upper panel, the display window indicates the communication protocol bein
 
 The data panel lists the location ("familiar name" -- see configuration section below) or thermometer identifier, temperature, % relative humidity, and warning flags for each individual thermometer seen.  By default, temperature is reported in Fahrenheit: to have the temperature reported in Celsius, invoke with `DNT -C`.
 
-The thermometer identifier is a concatenation of "model"/"channel"/"id" as reported by `rtl_433` and looks something like "Acurite-Tower/A/11524".  Unless you've configured `DNT` to associate the thermometer identifier with a "familiar name" or "location", the data display will list devices in the order in which they were observed by `rtl_433` beginning when `DNT` first started seeing MQTT events.
+The thermometer identifier is a concatenation of "model"/"id"/"channel" as reported by `rtl_433` and looks something like "Acurite-Tower/11524/A".  Unless you've configured `DNT` to associate the thermometer identifier with a "familiar name" or "location", the data display will list devices in the order in which they were observed by `rtl_433` beginning when `DNT` first started seeing MQTT events.
 
 If you've configured `DNT` to associate the thermometer identifier with location, those devices will be moved to the top of the display list as they're observed by `rtl_433`.
 
@@ -108,7 +108,7 @@ All but the host name are set to default values and may not need to be changed. 
 
 You may have trouble identifying the location of the various thermometer remotes from which your RTL-SDR receives signals.  But you can likely identify those that are closest to you by observing the average signal-to-noise ratio over time and selecting those with the highest SNR for display in your table.  See the section below on how to do that.
 
-**Over time, the "id" number of your dictionary entries will change!**  When the batteries on the remote are depleted, the owner must reinstall new  batteries and re-synch the remote with the indoor thermometer: for most devices, the "id" changes.  Use `mosquitto_sub` or `mqTest` or `DNT -d` or `http_rtl` to monitor the devices transmitting in your neighborhood and update the "model/channel/id" value in the association dictionary accordingly.  Or catalog devices using the method below and edit entries from the list `rtl_433_stats` generates.
+**Over time, the "id" number of your dictionary entries will change!**  When the batteries on the remote are depleted, the owner must reinstall new  batteries and re-synch the remote with the indoor thermometer: for most devices, the "id" changes.  Use `mosquitto_sub` or `mqTest` or `DNT -d` or `http_rtl` to monitor the devices transmitting in your neighborhood and update the "model/id/channel" value in the association dictionary accordingly.  Or catalog devices using the method below and edit entries from the list `rtl_433_stats` generates.
 
 ### Command-line Options and  Debugging
 
