@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 #  DNT
-VERSION="3.0.0"
+VERSION="3.0.1"
 
 #Display Temperatures from neighborhood remote thermometers
 # Modeled after
 #   https://learn.sparkfun.com/tutorials/python-gui-guide-introduction-to-tkinter/experiment-3-sensor-dashboard
 #
-# HDTodd, Williston, VT, v1 2023.02; v2 2023.04; v3 2024.08
+# HDTodd, Williston, VT, v1 2023.02; v2 2023.04; v3 2024.08; v3.0.1 2025.02.13
 
 import argparse
 import sys
