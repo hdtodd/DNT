@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 # Program to confirm that the rtl_433 server is streaming JSON via HTTP
-# David Todd, hdtodd@gmail.com
+# Written by David Todd, hdtodd@gmail.com
 
 """Custom data handling example for rtl_433's HTTP (line) streaming API of JSON events."""
 
