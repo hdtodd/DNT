@@ -47,15 +47,15 @@ AP_EPILOG="""
 # Locations of known local sensors to be monitored
 # These will appear at the top of the displayed table, with the location
 #   "familiar name" rather than device identifier listed
-# Dictionary entries are "model/channel/id":"Familiar Name".
+# Dictionary entries are "model/id/channel":"Familiar Name".
 # Run this program from a terminal session to see a list of "model/channel/id"
 #   dictionary keywords for devices in your neighborhood, then add entries with
 #   those keywords and associated locations into the 'location' dictionary here
 
 location = {
-    "Acurite-609TXC//99"        : "Deck",
-    "Acurite-609TXC//199"       : "Office",
-    "Acurite-606TX/1/212"       : "Sun Room",
+    "Acurite-609TXC/99/"        : "Deck",
+    "Acurite-609TXC/199/"       : "Office",
+    "Acurite-606TX/212/1"       : "Sun Room",
     }
 
 ##  *** END LOCAL MODIFICATIONS ***
@@ -583,13 +583,13 @@ def process_msg():
         if "model" not in y:
             continue
 
-        #  Create the device identifier as "model/channel/id"
+        #  Create the device identifier as "model/id/channel"
         dev = y["model"] + "/"
-        if "channel" in y:
-            dev += str(y["channel"])
-        dev += "/"
         if "id" in y:
             dev += str(y["id"])
+        dev += "/"
+        if "channel" in y:
+            dev += str(y["channel"])
 
         # if this is a themometer reading, process it; otherwise just return
         if "temperature_C" in y.keys():
