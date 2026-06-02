@@ -75,7 +75,6 @@ Hport     = 8433
 Mport     = 1883
 username  = ""
 password  = ""
-client_id = f'python-mqtt-{random.randint(0, 100)}'
 
 # By default, use Fahrenheit scale for display
 useF   = True

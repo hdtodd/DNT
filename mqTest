@@ -95,15 +95,24 @@ thresh = 2.0
 lastEntry = {"time":0.0, "model":"", "id":0}
 
 def connect_mqtt() -> mqtt_client:
-    def on_connect(client, userdata, flags, rc):
-        if rc == 0:
-            print("Connected to MQTT Broker!")
+    def on_connect(client, userdata, flags, reason_code, properties):
+        if reason_code == 0:
+            print("Connected to MQTT broker host ", broker)
         else:
-            print("Failed to connect, return code %d\n", rc)
+            print("Failed attempt to connect to ", broker)
+            print("  with userdata ", userdata)
+            print("Reason code:", reason_code)
+            sys.exit(1)
+        return #from on_connect
+
+    # Try connecting with Version2 of callback; quit if it fails
     try:
-        client = mqtt_client.Client(client_id)
+        client = mqtt_client.Client(mqtt_client.CallbackAPIVersion.VERSION2)
     except:
-        client = mqtt_client.Client(mqtt_client.CallbackAPIVersion.VERSION1, client_id)
+        print("Attempt to use VERSION2 of MQTT callback failed!")
+        print("Check the version number of your installed Paho-MQTT with 'check_paho_version'")
+        print("  or invoke 'DNT.3.0.1' to try to use Paho-MQTT callback V1")
+        sys.exit(1)
     client.username_pw_set(username, password)
     client.on_connect = on_connect
     client.connect(broker, port)
