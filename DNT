@@ -658,22 +658,25 @@ def process_msg():
 # Connect to  MQTT host
 def connect_mqtt() -> mqtt_client:
     global debug
-    def on_connect(mqtt, userdata, flags, rc):
-        if rc == 0:
-            if debug:
-                print("Connected to MQTT host!")
+    def on_connect(mqtt, userdata, flags, reason_code, properties):
+        if reason_code == 0:
+            print("Connected to MQTT broker host ", host)
         else:
-            print("Failed attempt to connect to ", mqtt)
+            print("Failed attempt to connect to ", host)
             print("  with userdata ", userdata)
-            print("Return code %d\n", rc)
+            print("Reason code: ", reason_code)
             sys.exit(1)
-        return #from on_connect()
-    
-    # Work around paho-mqtt v1, v2+ Client instantiation parameter diffs
+        return #from on_connect
+
+    # Try connecting with Version2 of callback; quit if it fails
     try:
-        mqtt = mqtt_client.Client(client_id, clean_session=False)
+        mqtt = mqtt_client.Client(mqtt_client.CallbackAPIVersion.VERSION2)
     except:
-        mqtt = mqtt_client.Client(mqtt_client.CallbackAPIVersion.VERSION1, client_id, clean_session=False)
+        print("Attempt to use VERSION2 of MQTT callback failed!")
+        print("Check the version number of your installed Paho-MQTT with 'check_paho_version'")
+        print("  or invoke 'rtl_watch.4.0.1' to try to use Pah-MQTT callback V1")
+        sys.exit(1)
+
     mqtt.username_pw_set(username, password)
     mqtt.on_connect = on_connect
     if debug:

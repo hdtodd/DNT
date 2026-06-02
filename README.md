@@ -11,7 +11,10 @@ The readings are obtained from the `rtl_433` program that monitors the Industria
 
 `DNT` requires access to an `rtl_433` service (which may be on the same computer) as its source of weather remote-sensor data.  `DNT` can connect to that service via either HTTP or MQTT network protocols.  `DNT` requires Python3 on the displaying computer.  You can confirm that the `rtl_433` host is streaming HTTP by running the `stream` program from this repository.  You can confirm that the `rtl_433` host is publishing MQTT records by subscribing to the feed: `mosquitto_sub -h <host> -t "rtl_433/<host>/events"`.
 
-If you choose to use MQTT as the communication protocol, `DNT` also requires Paho-MQTT to be installed on that computer.  Paho-MQTT v2 broke v1 callback invocations, but v2.2 of `DNT` and subsequent versions incorporate a workaround so that it will operate with either v1.x or v2.x of Paho-MQTT.
+If you choose to use MQTT as the communication protocol, `DNT` also requires Paho-MQTT to be installed on that computer.
+
+>[!NOTE]
+>This current version of `DNT` requires that you have installed the current version of Paho-MQTT (V2 at this time).  Paho-MQTT V2 broke V1 callback invocations.  `DNT` V3.0.1 incorporated a workaround so that version of `DNT`  will operate with either v1.x or v2.x of Paho-MQTT, and it is archived in this repository.  However, Paho-MQTT V3 is expected to drop support for V1 invocations.  In anticipation of that future development,`DNT` V3.0.2 drops support for Paho-MQTT V1 invocations; use `DNT.3.0.1` if you are on a system that does not support Paho-MQTT V2 or later.  You can use `check_paho_vers` from this repository to tell you which version of Paho-MQTT you're running.
 
 If your system already has the required components, the command `./DNT` is all that's needed to display local temperatures.  `./DNT` starts the program and  prompts for the name of the `rtl_433` host on your local area network that provides MQTT subscription service.  `./DNT -H <hostname>` starts the program without the prompt.  `./DNT -S HTTP -H <hostname>` starts the program and connects using the HTTP program, if the `rtl_433` service is configured to provide HTTP streaming.
 
@@ -65,8 +68,8 @@ If you already have an `rtl_433` host running on your network and publishing eve
 
 Then perform these steps on the computers you intend to use to display temperatures from neighborhood thermometer remotes:
 
-1. If you haven't already done so, download this package: `git clone https://github.com/hdtodd/DNT` on a system that will run XWindows and has a touchscreen or has a keyboard/mouse/display attached.  The remaining work is on that system.
-1. Install the Python3 `mqtt` library used to receive the `mqtt` JSON packets from the monitoring system over your local network: `pip3 install paho-mqtt`.  New installs will install v2 of paho-mqtt, but `DNT` will function with older v1 versions of paho-mqtt as well.
+1. If you haven't already done so, download this package: `git clone https://github.com/hdtodd/DNT` on a system that has a touchscreen or has a keyboard/mouse/display attached.  The remaining work is on that system.
+1. Install the Python3 `mqtt` library used to receive the `mqtt` JSON packets from the monitoring system over your local network: `pip3 install paho-mqtt`.  New installs will install v2 or later of paho-mqtt.
 1. If the `rtl_433` service system is streaming data via HTTP, run `./http_rtl` on the monitoring system to confirm that it is able to receive the streamed data.
 1. If you're using MQTT protocol, start up the MQTT verification program: `./mqTest`, and provide the name of the `rtl_433` monitoring host. If your monitoring system is in operation, `mqTest` will simply type out on the terminal screen the information about the packets that the monitoring system is receiving via the RTL\_SDR dongle and publishing via `mqtt`.  If it isn't working, but testing with `mosquitto_sub` is working on your monitoring system, add command-line parameters  to `mqTest` to identify the correct host, topic, port and (if secured) username and password needed for the host computer MQTT subscription. `DNT` relies on the same connection system as `mqTest`, so once you've confirmed those parameters with `mqTest`, provide those parameters to `DNT`.  
 1. Finally, test `DNT`: 
