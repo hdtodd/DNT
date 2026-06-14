@@ -1,4 +1,4 @@
-# DNT: Display Neighborhood Temperatures Version 3.0.2
+# DNT: Display Neighborhood Temperatures Version 3.0.3
 ### Display thermometer readings from around your neighborbood
 
 `DNT` is a Python program that uses the output from `rtl_433` to display temperature and humidity readings from remote thermometers around your neighborhood.  
@@ -193,6 +193,7 @@ The developers of `rtl_433` continually update the list of devices that the prog
 
 | Version | Date       | Changes |
 |---------|------------|---------|
+| V3.0.3  | 2026.06.14 | Correct the processing of MQTT username and password in 'set_params()' for secured MQTT brokers |
 | V3.0.2  | 2026.06.01 | Update to use Paho-MQTT CallbackAPIVersion 2 |
 | V3.0.0  | 2024.08    | Add support for HTTP connections to existing MQTT support
 | V2.3.0  | 2024.07    | Correct "quit" hang; fix toggle font resizing |
